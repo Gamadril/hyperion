@@ -70,7 +70,6 @@ if [ $IS_OPENELEC == 1 ]; then
 	elif [ $TARGET_TYPE == "i686" ]; then
 		# Openelec 32bit for i686
 		curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion.deps.openelec_i686.tar.gz | tar -C $TARGET_PATH/hyperion/bin -xz
-		exit
 	elif [ $IS_IMX6 == 1 ]; then
 		# Openelec for imx6
 		curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion.deps.openelec_imx6.tar.gz | tar -C $TARGET_PATH/hyperion/bin -xz
@@ -80,7 +79,7 @@ if [ $IS_OPENELEC == 1 ]; then
 	fi
 	
 	# modify the default config to have a correct effect path
-	sed -i "s:/opt:$TARGET_PATH:g" $TARGET_PATH/hyperion/config/hyperion.config.json
+	sed -i 's:/opt:'"$TARGET_PATH"':g' $TARGET_PATH/hyperion/config/hyperion.config.json
 	
 	# copy to alternate location, because of readonly file system
 	# /storage/.config is available as samba share. A symbolic link would not be working
