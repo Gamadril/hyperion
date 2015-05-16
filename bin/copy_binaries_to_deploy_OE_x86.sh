@@ -29,11 +29,14 @@ cat <<EOF > "$builddir/hyperiond.sh"
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/storage/hyperion/bin /storage/hyperion/bin/hyperiond "\$@"
 EOF
 
+chmod +x "$builddir/hyperiond.sh"
+
 cat <<EOF > "$builddir/hyperion-remote.sh"
 #!/bin/sh
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/storage/hyperion/bin /storage/hyperion/bin/hyperion-remote "\$@"
 EOF
 
+chmod +x "$builddir/hyperion-remote.sh"
 
 tar --create --verbose --gzip --absolute-names --show-transformed-names \
 	--file "$outfile" \
