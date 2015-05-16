@@ -21,7 +21,7 @@ echo build directory = $builddir
 echo repository root dirrectory = $repodir
 
 outfile="$repodir/deploy/hyperion_$TARGET.tar.gz"
-outdeps="$repodir/deploy/hyperion.deps.openelec_$TARGET.tar.gz"
+outdeps="$repodir/deploy/hyperion.deps.openelec_$TARGET.tar"
 echo create $outfile
 
 cat <<EOF > "$builddir/hyperiond.sh"
@@ -69,4 +69,7 @@ tar --append --absolute-names --dereference --show-transformed-names --transform
 
 echo "Copying $builddir/bin/hyperion-remote.sh to $outdeps"
 tar --append --absolute-names --dereference --show-transformed-names --transform 's?.*/??g' --file "$outdeps" "$builddir/hyperion-remote.sh"
+
+echo "Compressing $outdeps"
+gzip -f $outdeps
 

@@ -47,16 +47,17 @@ fi
 echo "Downloading hyperion"
 if [ $TARGET_TYPE == "x86_64" ]; then
 	# x86_64
-	curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion_x86_64.tar.gz | tar -xzC $TARGET_PATH
+	curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion_x86_64.tar.gz | tar -C $TARGET_PATH -xz
 elif [ $TARGET_TYPE == "i686" ]; then
-	# x86_32
-	curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion_x86_32.tar.gz | tar -xzC $TARGET_PATH
+	# i686
+	curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion_i686.tar.gz | tar -C $TARGET_PATH -xz
+	echo ""
 elif [ $IS_IMX6 == 1 ]; then
 	# imx6
-	curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion_imx6.tar.gz | tar -xzC $TARGET_PATH
+	curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion_imx6.tar.gz | tar -C $TARGET_PATH -xz
 else
 	# rpi
-	curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion.tar.gz | tar -xzC $TARGET_PATH
+	curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion.tar.gz | tar -C $TARGET_PATH -xz
 fi
 
 if [ $IS_OPENELEC == 1 ]; then
@@ -65,16 +66,17 @@ if [ $IS_OPENELEC == 1 ]; then
 	
 	if [ $TARGET_TYPE == "x86_64" ]; then
 		# Openelec 64bit for x86
-		curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion.deps.openelec_x86_64.tar.gz | tar -xzC $TARGET_PATH/hyperion/bin
+		curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion.deps.openelec_x86_64.tar.gz | tar -C $TARGET_PATH/hyperion/bin -xz
 	elif [ $TARGET_TYPE == "i686" ]; then
-		# Openelec 32bit for x86
-		curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion.deps.openelec_x86_32.tar.gz | tar -xzC $TARGET_PATH/hyperion/bin
+		# Openelec 32bit for i686
+		curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion.deps.openelec_i686.tar.gz | tar -C $TARGET_PATH/hyperion/bin -xz
+		exit
 	elif [ $IS_IMX6 == 1 ]; then
 		# Openelec for imx6
-		curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion.deps.openelec_imx6.tar.gz | tar -xzC $TARGET_PATH/hyperion/bin		
+		curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion.deps.openelec_imx6.tar.gz | tar -C $TARGET_PATH/hyperion/bin -xz
 	else
 		# Openelec for rpi
-		curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion.deps.openelec-rpi.tar.gz | tar -xzC $TARGET_PATH/hyperion/bin
+		curl -L --get https://raw.githubusercontent.com/Gamadril/hyperion/master/deploy/hyperion.deps.openelec-rpi.tar.gz | tar -C $TARGET_PATH/hyperion/bin -xz
 	fi
 	
 	# modify the default config to have a correct effect path
