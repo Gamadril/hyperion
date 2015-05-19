@@ -79,7 +79,7 @@ if [ $IS_OPENELEC == 1 ]; then
 	fi
 	
 	# modify the default config to have a correct effect path
-	sed -i 's:/opt:'"$TARGET_PATH"':g' $TARGET_PATH/hyperion/config/hyperion.config.json
+	sed -i "s:/opt:${TARGET_PATH}:g" $TARGET_PATH/hyperion/config/hyperion.config.json
 	
 	# copy to alternate location, because of readonly file system
 	# /storage/.config is available as samba share. A symbolic link would not be working
