@@ -1,4 +1,11 @@
 #!/bin/bash
+### BEGIN INIT INFO
+# Provides:          hyperion
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
 # Hyperion daemon
 # description: Hyperion daemon
 # processname: hyperiond

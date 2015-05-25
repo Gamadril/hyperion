@@ -25,7 +25,7 @@ FramebufferFrameGrabber::FramebufferFrameGrabber(const std::string & device, con
 
 	// Check if the framebuffer device can be opened and display the current resolution
 	_fbfd = open(_fbDevice.c_str(), O_RDONLY);
-	if (_fbfd == 0)
+	if (_fbfd == -1)
 	{
 		std::cerr << "Error openning " << _fbDevice << std::endl;
 	}
@@ -39,7 +39,15 @@ FramebufferFrameGrabber::FramebufferFrameGrabber(const std::string & device, con
 		}
 		else
 		{
-			std::cout << "Framebuffer opened with resolution: " << vinfo.xres << "x" << vinfo.yres << "@" << vinfo.bits_per_pixel << "bit" << std::endl;			
+			std::cout << "Framebuffer opened with resolution: " << vinfo.xres << "x" << vinfo.yres << "@" << vinfo.bits_per_pixel << "bit" << std::endl;
+			if (vinfo.bits_per_pixel == 32)
+			{
+				char order[4] = "";
+				order[vinfo.red.offset / 8] = 'R';
+				order[vinfo.green.offset / 8] = 'G';
+				order[vinfo.blue.offset / 8] = 'B';
+				std::cout << "Framebuffer color order: " << order << std::endl;
+			}
 		}
 		close(_fbfd);
 	}
@@ -63,6 +71,12 @@ void FramebufferFrameGrabber::grabFrame(Image<ColorRgb> & image)
 
 	/* Open the framebuffer device */
 	_fbfd = open(_fbDevice.c_str(), O_RDONLY);
+	
+	if (_fbfd == -1)
+	{
+		std::cerr << "Error openning " << _fbDevice << std::endl;
+		return;
+	}
 
 	/* get variable screen information */
 	ioctl (_fbfd, FBIOGET_VSCREENINFO, &vinfo);
@@ -80,7 +94,10 @@ void FramebufferFrameGrabber::grabFrame(Image<ColorRgb> & image)
 	}	
 	else if (vinfo.bits_per_pixel == 32)
 	{
-		pixelFormat = PIXELFORMAT_BGR32;
+		if (vinfo.red.offset == 0)
+			pixelFormat = PIXELFORMAT_RGB32;
+		else
+			pixelFormat = PIXELFORMAT_BGR32;
 	}
 	else
 	{
