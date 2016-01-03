@@ -1,35 +1,42 @@
+#SET(CMAKE_SKIP_BUILD_RPATH TRUE)
+#SET(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+if(APPLE)
+    SET(CMAKE_INSTALL_RPATH "@executable_path/lib")
+else()
+    SET(CMAKE_INSTALL_RPATH "\$ORIGIN/lib")
+endif()
+#SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
 
 add_executable(hyperiond
 		hyperiond.cpp)
 
 target_link_libraries(hyperiond
+		PocoUtil
+		PocoFoundation
+		PocoJSON
 		hyperion
-		xbmcvideochecker
-		effectengine
-		jsonserver
-		boblightserver
 )
 
-if (ENABLE_DISPMANX)
-	target_link_libraries(hyperiond dispmanx-grabber)
-endif (ENABLE_DISPMANX)
+if (ENABLE_SERVER_JSON)
+	target_link_libraries(hyperiond jsonserver)
+endif ()
 
-if (ENABLE_FB)
-	target_link_libraries(hyperiond framebuffer-grabber)
-endif (ENABLE_FB)
+if (ENABLE_KODI_CONNECTION)
+	target_link_libraries(hyperiond kodiconnector)
+endif ()
 
-if (ENABLE_OSX)
-	target_link_libraries(hyperiond osx-grabber)
-endif (ENABLE_OSX)
+if (ENABLE_EFFECT_ENGINE)
+	target_link_libraries(hyperiond effectengine)
+endif ()
 
-if (ENABLE_V4L2)
-	target_link_libraries(hyperiond v4l2-grabber)
-endif (ENABLE_V4L2)
+if (ENABLE_SERVER_BOBLIGHT)
+	target_link_libraries(hyperiond boblightserver)
+endif ()
 
-if (ENABLE_AMLOGIC)
-	target_link_libraries(hyperiond amlogic-grabber)
-endif (ENABLE_AMLOGIC)
+if (ENABLE_GRABBER)
+	target_link_libraries(hyperiond framegrabber)
+endif ()
 
-if (ENABLE_PROTOBUF)
-	target_link_libraries(hyperiond protoserver)
-endif (ENABLE_PROTOBUF)
+target_link_libraries(hyperiond ${CROSS_LIBS})
+
+install(TARGETS hyperiond RUNTIME DESTINATION .)

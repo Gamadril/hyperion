@@ -19,41 +19,41 @@ class ProtoClientConnection;
 ///
 class ProtoServer : public QObject
 {
-	Q_OBJECT
+    Q_OBJECT
 
 public:
-	///
-	/// ProtoServer constructor
-	/// @param hyperion Hyperion instance
-	/// @param port port number on which to start listening for connections
-	///
-	ProtoServer(Hyperion * hyperion, uint16_t port = 19445);
-	~ProtoServer();
+    ///
+    /// ProtoServer constructor
+    /// @param hyperion Hyperion instance
+    /// @param port port number on which to start listening for connections
+    ///
+    ProtoServer(Hyperion * hyperion, uint16_t port = 19445);
+    ~ProtoServer();
 
-	///
-	/// @return the port number on which this TCP listens for incoming connections
-	///
-	uint16_t getPort() const;
+    ///
+    /// @return the port number on which this TCP listens for incoming connections
+    ///
+    uint16_t getPort() const;
 
 private slots:
-	///
-	/// Slot which is called when a client tries to create a new connection
-	///
-	void newConnection();
+    ///
+    /// Slot which is called when a client tries to create a new connection
+    ///
+    void newConnection();
 
-	///
-	/// Slot which is called when a client closes a connection
-	/// @param connection The Connection object which is being closed
-	///
-	void closedConnection(ProtoClientConnection * connection);
+    ///
+    /// Slot which is called when a client closes a connection
+    /// @param connection The Connection object which is being closed
+    ///
+    void closedConnection(ProtoClientConnection * connection);
 
 private:
-	/// Hyperion instance
-	Hyperion * _hyperion;
+    /// Hyperion instance
+    Hyperion * _hyperion;
 
-	/// The TCP server object
-	QTcpServer _server;
+    /// The TCP server object
+    QTcpServer _server;
 
-	/// List with open connections
-	QSet<ProtoClientConnection *> _openConnections;
+    /// List with open connections
+    QSet<ProtoClientConnection *> _openConnections;
 };

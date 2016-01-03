@@ -1,9 +1,9 @@
 {
 	"name" : "Snake",
-	"script" : "snake.py",
+	"script" : "snake.lua",
 	"args" :
 	{
-		"rotation-time" : 10.0,
+		"rotation-time" : 100,
 		"color" : [255, 0, 0],
 		"percentage" : 25
 	}

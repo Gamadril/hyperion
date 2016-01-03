@@ -18,20 +18,20 @@
 				"saturationGain" : {
 					"type" : "number",
 					"required" : false,
-					"minimum" : 0.0
+					"minimum" : 0
 				},
 				"valueGain" : {
 					"type" : "number",
 					"required" : false,
-					"minimum" : 0.0
+					"minimum" : 0
 				},
 				"threshold": {
 					"type": "array",
 					"required": false,
 					"items" : {
 						"type": "number",
-						"minimum": 0.0,
-						"maximum": 1.0
+						"minimum": 0,
+						"maximum": 1
 					},
 					"minItems": 3,
 					"maxItems": 3
@@ -41,7 +41,7 @@
 					"required": false,
 					"items" : {
 						"type": "number",
-						"minimum": 0.0
+						"minimum": 0
 					},
 					"minItems": 3,
 					"maxItems": 3

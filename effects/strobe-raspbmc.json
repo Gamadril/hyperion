@@ -1,6 +1,6 @@
 {
 	"name" : "Strobe Raspbmc",
-	"script" : "strobe.py",
+	"script" : "strobe.lua",
 	"args" :
 	{
 		"color"     : [ 188, 17, 66 ],

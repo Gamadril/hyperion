@@ -6,11 +6,12 @@
 /**
  * Enumeration of the possible pixel formats the grabber can be set to
  */
-enum PixelFormat {
-	PIXELFORMAT_YUYV,
-	PIXELFORMAT_UYVY,
-	PIXELFORMAT_BGR16,
-	PIXELFORMAT_BGR24,
+enum PixelFormat
+{
+    PIXELFORMAT_YUYV,
+    PIXELFORMAT_UYVY,
+    PIXELFORMAT_BGR16,
+    PIXELFORMAT_BGR24,
     PIXELFORMAT_RGB32,
     PIXELFORMAT_BGR32,
     PIXELFORMAT_NO_CHANGE
@@ -18,17 +19,17 @@ enum PixelFormat {
 
 inline PixelFormat parsePixelFormat(std::string pixelFormat)
 {
-	// convert to lower case
-	std::transform(pixelFormat.begin(), pixelFormat.end(), pixelFormat.begin(), ::tolower);
+    // convert to lower case
+    std::transform(pixelFormat.begin(), pixelFormat.end(), pixelFormat.begin(), ::tolower);
 
-	if (pixelFormat == "yuyv")
-	{
-		return PIXELFORMAT_YUYV;
-	}
-	else if (pixelFormat == "uyvy")
-	{
-		return PIXELFORMAT_UYVY;
-	}
+    if (pixelFormat == "yuyv")
+    {
+        return PIXELFORMAT_YUYV;
+    }
+    else if (pixelFormat == "uyvy")
+    {
+        return PIXELFORMAT_UYVY;
+    }
     else if (pixelFormat == "bgr16")
     {
         return PIXELFORMAT_BGR16;
@@ -46,6 +47,6 @@ inline PixelFormat parsePixelFormat(std::string pixelFormat)
         return PIXELFORMAT_BGR32;
     }
 
-	// return the default NO_CHANGE
-	return PIXELFORMAT_NO_CHANGE;
+    // return the default NO_CHANGE
+    return PIXELFORMAT_NO_CHANGE;
 }

@@ -1,57 +1,47 @@
 // system includes
 #include <stdexcept>
 
+#include "Poco/Net/TCPServerConnectionFactory.h"
+
 // project includes
 #include <boblightserver/BoblightServer.h>
 #include "BoblightClientConnection.h"
 
-BoblightServer::BoblightServer(Hyperion *hyperion, uint16_t port) :
-	QObject(),
-	_hyperion(hyperion),
-	_server(),
-	_openConnections()
+
+class BoblightServerConnectionFactory : public Poco::Net::TCPServerConnectionFactory
 {
-	if (!_server.listen(QHostAddress::Any, port))
+public:
+	BoblightServerConnectionFactory(Hyperion *hyperion):
+		_hyperion(hyperion)
 	{
-		throw std::runtime_error("Boblight server could not bind to port");
+	}
+	
+	Poco::Net::TCPServerConnection* createConnection(const Poco::Net::StreamSocket& socket)
+	{
+        std::cout << "New boblight connection" << std::endl;
+		return new BoblightClientConnection((Poco::Net::DialogSocket *)&socket, _hyperion);
 	}
 
-	// Set trigger for incoming connections
-	connect(&_server, SIGNAL(newConnection()), this, SLOT(newConnection()));
+private:
+	Hyperion * _hyperion;
+};
+
+
+BoblightServer::BoblightServer(Hyperion *hyperion, uint16_t port) :
+    _hyperion(hyperion)
+{
+    Poco::Net::ServerSocket serverSocket(port);
+    _server = new Poco::Net::TCPServer(new BoblightServerConnectionFactory(_hyperion), serverSocket);
+    _server->start();
 }
 
 BoblightServer::~BoblightServer()
 {
-	foreach (BoblightClientConnection * connection, _openConnections) {
-		delete connection;
-	}
+    _server->stop();
+    delete _server;
 }
 
 uint16_t BoblightServer::getPort() const
 {
-	return _server.serverPort();
-}
-
-void BoblightServer::newConnection()
-{
-	QTcpSocket * socket = _server.nextPendingConnection();
-
-	if (socket != nullptr)
-	{
-		std::cout << "New boblight connection" << std::endl;
-		BoblightClientConnection * connection = new BoblightClientConnection(socket, _hyperion);
-		_openConnections.insert(connection);
-
-		// register slot for cleaning up after the connection closed
-		connect(connection, SIGNAL(connectionClosed(BoblightClientConnection*)), this, SLOT(closedConnection(BoblightClientConnection*)));
-	}
-}
-
-void BoblightServer::closedConnection(BoblightClientConnection *connection)
-{
-	std::cout << "Boblight connection closed" << std::endl;
-	_openConnections.remove(connection);
-
-	// schedule to delete the connection object
-	connection->deleteLater();
+    return _server->port();
 }

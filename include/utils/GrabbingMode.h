@@ -5,12 +5,11 @@
  */
 enum GrabbingMode
 {
-	/** Frame grabbing is switched off */
-	GRABBINGMODE_OFF,
-	/** Frame grabbing during video */
-	GRABBINGMODE_VIDEO,
-	GRABBINGMODE_PHOTO,
-	GRABBINGMODE_AUDIO,
-	GRABBINGMODE_MENU,
-	GRABBINGMODE_INVALID
+    /** Frame grabbing is switched off */
+    GRABBINGMODE_OFF,
+    GRABBINGMODE_VIDEO,
+    GRABBINGMODE_PHOTO,
+    GRABBINGMODE_AUDIO,
+    GRABBINGMODE_MENU,
+    GRABBINGMODE_SCREENSAVER
 };

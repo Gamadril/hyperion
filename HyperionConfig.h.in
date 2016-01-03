@@ -1,29 +1,63 @@
 // Generated config file
 
-// Define to enable the dispmanx grabber
-#cmakedefine ENABLE_DISPMANX
+#cmakedefine ENABLE_LED_LPD6803
 
-// Define to enable the v4l2 grabber
-#cmakedefine ENABLE_V4L2
+#cmakedefine ENABLE_LED_LPD8806
 
-// Define to enable the spi-device
-#cmakedefine ENABLE_SPIDEV
+#cmakedefine ENABLE_LED_P9813
 
-// Define to enable the ws2812b-pwm-device
 #cmakedefine ENABLE_WS2812BPWM
 
-// Define to enable the spi-device
-#cmakedefine ENABLE_TINKERFORGE
+#cmakedefine ENABLE_LED_WS2801
 
-// Define to enable PROTOBUF server
-#cmakedefine ENABLE_PROTOBUF
+#cmakedefine ENABLE_LED_APA102
 
-// Define to enable the framebuffer grabber
-#cmakedefine ENABLE_FB
+#cmakedefine ENABLE_LED_TINKERFORGE
 
-// Define to enable the amlogic grabber
-#cmakedefine ENABLE_AMLOGIC
+#cmakedefine ENABLE_LED_ADALIGHT
 
-// Define to enable the osx grabber
-#cmakedefine ENABLE_OSX
+#cmakedefine ENABLE_LED_AMBILED
 
+#cmakedefine ENABLE_LED_LIGHTPACK
+
+#cmakedefine ENABLE_LED_MULTILIGHTPACK
+
+#cmakedefine ENABLE_LED_PAINTPACK
+
+#cmakedefine ENABLE_LED_PIBLASTER
+
+#cmakedefine ENABLE_LED_SEDU
+
+#cmakedefine ENABLE_LED_USBASP
+
+#cmakedefine ENABLE_LED_PHILIPSHUE
+
+#cmakedefine ENABLE_LED_SERIAL_TPM2
+
+#cmakedefine ENABLE_LED_TCPSOCKET_TPM2
+
+#cmakedefine ENABLE_LED_ATMO
+
+#cmakedefine ENABLE_LED_WS2812B_PWM
+
+#cmakedefine ENABLE_LED_TINKERFORGE
+
+#cmakedefine ENABLE_GRABBER_DISPMANX
+
+#cmakedefine ENABLE_GRABBER_V4L2
+
+#cmakedefine ENABLE_GRABBER_X11
+
+#cmakedefine ENABLE_GRABBER_FB
+
+#cmakedefine ENABLE_GRABBER_OSX
+
+#cmakedefine ENABLE_GRABBER
+
+#cmakedefine ENABLE_EFFECT_ENGINE
+
+#cmakedefine ENABLE_KODI_CONNECTION
+
+#cmakedefine ENABLE_SERVER_BOBLIGHT
+
+#cmakedefine ENABLE_SERVER_JSON

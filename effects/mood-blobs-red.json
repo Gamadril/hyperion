@@ -1,6 +1,6 @@
 {
 	"name" : "Red mood blobs",
-	"script" : "mood-blobs.py",
+	"script" : "mood-blobs.lua",
 	"args" :
 	{
 		"rotationTime" : 60.0,

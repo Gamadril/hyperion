@@ -1,6 +1,7 @@
  # Needed for testing non-public components
 include_directories(../libsrc)
 
+#[[
 if(ENABLE_SPIDEV)
 	# Add the simple test executable 'TestSpi'
 	add_executable(test_spi TestSpi.cpp)
@@ -60,3 +61,9 @@ if(ENABLE_X11)
     add_executable(test_x11performance TestX11Performance.cpp)
 	target_link_libraries(test_x11performance ${X11_LIBRARIES} ${QT_LIBRARIES})
 endif(ENABLE_X11)
+]]
+
+#add_executable(test_effectengine TestEffectEngine)
+add_executable(test_timer TimerTest.cpp)
+target_link_libraries(test_timer
+		PocoFoundation)

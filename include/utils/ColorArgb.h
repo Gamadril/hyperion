@@ -9,28 +9,28 @@ struct ColorArgb;
 struct ColorArgb
 {
 
-	/// The alpha mask channel
-	uint8_t alpha;
+    /// The alpha mask channel
+    uint8_t alpha;
 
-	/// The red color channel
-	uint8_t red;
-	/// The green color channel
-	uint8_t green;
-	/// The blue color channel
-	uint8_t blue;
+    /// The red color channel
+    uint8_t red;
+    /// The green color channel
+    uint8_t green;
+    /// The blue color channel
+    uint8_t blue;
 
-	/// 'Black' RgbColor (255, 0, 0, 0)
-	static ColorArgb BLACK;
-	/// 'Red' RgbColor (255, 255, 0, 0)
-	static ColorArgb RED;
-	/// 'Green' RgbColor (255, 0, 255, 0)
-	static ColorArgb GREEN;
-	/// 'Blue' RgbColor (255, 0, 0, 255)
-	static ColorArgb BLUE;
-	/// 'Yellow' RgbColor (255, 255, 255, 0)
-	static ColorArgb YELLOW;
-	/// 'White' RgbColor (255, 255, 255, 255)
-	static ColorArgb WHITE;
+    /// 'Black' RgbColor (255, 0, 0, 0)
+    static ColorArgb BLACK;
+    /// 'Red' RgbColor (255, 255, 0, 0)
+    static ColorArgb RED;
+    /// 'Green' RgbColor (255, 0, 255, 0)
+    static ColorArgb GREEN;
+    /// 'Blue' RgbColor (255, 0, 0, 255)
+    static ColorArgb BLUE;
+    /// 'Yellow' RgbColor (255, 255, 255, 0)
+    static ColorArgb YELLOW;
+    /// 'White' RgbColor (255, 255, 255, 255)
+    static ColorArgb WHITE;
 };
 
 
@@ -46,7 +46,7 @@ static_assert(sizeof(ColorArgb) == 4, "Incorrect size of ColorARGB");
 ///
 inline std::ostream& operator<<(std::ostream& os, const ColorArgb& color)
 {
-	os << "{" << unsigned(color.alpha) << "," << unsigned(color.red) << "," << unsigned(color.green) << "," << unsigned(color.blue) << "}";
-	return os;
+    os << "{" << unsigned(color.alpha) << "," << unsigned(color.red) << "," << unsigned(color.green) << "," << unsigned(color.blue) << "}";
+    return os;
 }
 

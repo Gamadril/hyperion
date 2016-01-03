@@ -19,14 +19,14 @@
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 
 V4L2Grabber::V4L2Grabber(const std::string & device,
-        int input,
-        VideoStandard videoStandard,
-        PixelFormat pixelFormat,
-        int width,
-        int height,
-        int frameDecimation,
-        int horizontalPixelDecimation,
-        int verticalPixelDecimation) :
+                         int input,
+                         VideoStandard videoStandard,
+                         PixelFormat pixelFormat,
+                         int width,
+                         int height,
+                         int frameDecimation,
+                         int horizontalPixelDecimation,
+                         int verticalPixelDecimation) :
     _deviceName(device),
     _ioMethod(IO_METHOD_MMAP),
     _fileDescriptor(-1),
@@ -38,11 +38,11 @@ V4L2Grabber::V4L2Grabber(const std::string & device,
     _frameByteSize(-1),
     _frameDecimation(std::max(1, frameDecimation)),
     _noSignalCounterThreshold(50),
-    _noSignalThresholdColor(ColorRgb{0,0,0}),
-    _currentFrame(0),
-    _noSignalCounter(0),
-    _streamNotifier(nullptr),
-    _imageResampler()
+    _noSignalThresholdColor(ColorRgb {0,0,0}),
+                        _currentFrame(0),
+                        _noSignalCounter(0),
+                        _streamNotifier(nullptr),
+                        _imageResampler()
 {
     _imageResampler.setHorizontalPixelDecimation(std::max(1, horizontalPixelDecimation));
     _imageResampler.setVerticalPixelDecimation(std::max(1, verticalPixelDecimation));
@@ -153,7 +153,8 @@ void V4L2Grabber::init_read(unsigned int buffer_size)
     _buffers[0].length = buffer_size;
     _buffers[0].start = malloc(buffer_size);
 
-    if (!_buffers[0].start) {
+    if (!_buffers[0].start)
+    {
         throw_exception("Out of memory");
     }
 }
@@ -168,17 +169,22 @@ void V4L2Grabber::init_mmap()
     req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     req.memory = V4L2_MEMORY_MMAP;
 
-    if (-1 == xioctl(VIDIOC_REQBUFS, &req)) {
-        if (EINVAL == errno) {
+    if (-1 == xioctl(VIDIOC_REQBUFS, &req))
+    {
+        if (EINVAL == errno)
+        {
             std::ostringstream oss;
             oss << "'" << _deviceName << "' does not support memory mapping";
             throw_exception(oss.str());
-        } else {
+        }
+        else
+        {
             throw_errno_exception("VIDIOC_REQBUFS");
         }
     }
 
-    if (req.count < 2) {
+    if (req.count < 2)
+    {
         std::ostringstream oss;
         oss << "Insufficient buffer memory on " << _deviceName;
         throw_exception(oss.str());
@@ -186,7 +192,8 @@ void V4L2Grabber::init_mmap()
 
     _buffers.resize(req.count);
 
-    for (size_t n_buffers = 0; n_buffers < req.count; ++n_buffers) {
+    for (size_t n_buffers = 0; n_buffers < req.count; ++n_buffers)
+    {
         struct v4l2_buffer buf;
 
         CLEAR(buf);
@@ -200,11 +207,11 @@ void V4L2Grabber::init_mmap()
 
         _buffers[n_buffers].length = buf.length;
         _buffers[n_buffers].start =
-                mmap(NULL /* start anywhere */,
-                     buf.length,
-                     PROT_READ | PROT_WRITE /* required */,
-                     MAP_SHARED /* recommended */,
-                     _fileDescriptor, buf.m.offset);
+            mmap(NULL /* start anywhere */,
+                 buf.length,
+                 PROT_READ | PROT_WRITE /* required */,
+                 MAP_SHARED /* recommended */,
+                 _fileDescriptor, buf.m.offset);
 
         if (MAP_FAILED == _buffers[n_buffers].start)
             throw_errno_exception("mmap");
@@ -221,24 +228,29 @@ void V4L2Grabber::init_userp(unsigned int buffer_size)
     req.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     req.memory = V4L2_MEMORY_USERPTR;
 
-    if (-1 == xioctl(VIDIOC_REQBUFS, &req)) {
+    if (-1 == xioctl(VIDIOC_REQBUFS, &req))
+    {
         if (EINVAL == errno)
         {
             std::ostringstream oss;
             oss << "'" << _deviceName << "' does not support user pointer";
             throw_exception(oss.str());
-        } else {
+        }
+        else
+        {
             throw_errno_exception("VIDIOC_REQBUFS");
         }
     }
 
     _buffers.resize(4);
 
-    for (size_t n_buffers = 0; n_buffers < 4; ++n_buffers) {
+    for (size_t n_buffers = 0; n_buffers < 4; ++n_buffers)
+    {
         _buffers[n_buffers].length = buffer_size;
         _buffers[n_buffers].start = malloc(buffer_size);
 
-        if (!_buffers[n_buffers].start) {
+        if (!_buffers[n_buffers].start)
+        {
             throw_exception("Out of memory");
         }
     }
@@ -249,11 +261,14 @@ void V4L2Grabber::init_device(VideoStandard videoStandard, int input)
     struct v4l2_capability cap;
     if (-1 == xioctl(VIDIOC_QUERYCAP, &cap))
     {
-        if (EINVAL == errno) {
+        if (EINVAL == errno)
+        {
             std::ostringstream oss;
             oss << "'" << _deviceName << "' is no V4L2 device";
             throw_exception(oss.str());
-        } else {
+        }
+        else
+        {
             throw_errno_exception("VIDIOC_QUERYCAP");
         }
     }
@@ -265,25 +280,26 @@ void V4L2Grabber::init_device(VideoStandard videoStandard, int input)
         throw_exception(oss.str());
     }
 
-    switch (_ioMethod) {
-    case IO_METHOD_READ:
-        if (!(cap.capabilities & V4L2_CAP_READWRITE))
-        {
-            std::ostringstream oss;
-            oss << "'" << _deviceName << "' does not support read i/o";
-            throw_exception(oss.str());
-        }
-        break;
+    switch (_ioMethod)
+    {
+        case IO_METHOD_READ:
+            if (!(cap.capabilities & V4L2_CAP_READWRITE))
+            {
+                std::ostringstream oss;
+                oss << "'" << _deviceName << "' does not support read i/o";
+                throw_exception(oss.str());
+            }
+            break;
 
-    case IO_METHOD_MMAP:
-    case IO_METHOD_USERPTR:
-        if (!(cap.capabilities & V4L2_CAP_STREAMING))
-        {
-            std::ostringstream oss;
-            oss << "'" << _deviceName << "' does not support streaming i/o";
-            throw_exception(oss.str());
-        }
-        break;
+        case IO_METHOD_MMAP:
+        case IO_METHOD_USERPTR:
+            if (!(cap.capabilities & V4L2_CAP_STREAMING))
+            {
+                std::ostringstream oss;
+                oss << "'" << _deviceName << "' does not support streaming i/o";
+                throw_exception(oss.str());
+            }
+            break;
     }
 
 
@@ -294,22 +310,27 @@ void V4L2Grabber::init_device(VideoStandard videoStandard, int input)
 
     cropcap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
-    if (0 == xioctl(VIDIOC_CROPCAP, &cropcap)) {
+    if (0 == xioctl(VIDIOC_CROPCAP, &cropcap))
+    {
         struct v4l2_crop crop;
         crop.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         crop.c = cropcap.defrect; /* reset to default */
 
-        if (-1 == xioctl(VIDIOC_S_CROP, &crop)) {
-            switch (errno) {
-            case EINVAL:
-                /* Cropping not supported. */
-                break;
-            default:
-                /* Errors ignored. */
-                break;
+        if (-1 == xioctl(VIDIOC_S_CROP, &crop))
+        {
+            switch (errno)
+            {
+                case EINVAL:
+                    /* Cropping not supported. */
+                    break;
+                default:
+                    /* Errors ignored. */
+                    break;
             }
         }
-    } else {
+    }
+    else
+    {
         /* Errors ignored. */
     }
 
@@ -325,28 +346,28 @@ void V4L2Grabber::init_device(VideoStandard videoStandard, int input)
     // set the video standard if needed
     switch (videoStandard)
     {
-    case VIDEOSTANDARD_PAL:
-    {
-        v4l2_std_id std_id = V4L2_STD_PAL;
-        if (-1 == xioctl(VIDIOC_S_STD, &std_id))
+        case VIDEOSTANDARD_PAL:
         {
-            throw_errno_exception("VIDIOC_S_STD");
+            v4l2_std_id std_id = V4L2_STD_PAL;
+            if (-1 == xioctl(VIDIOC_S_STD, &std_id))
+            {
+                throw_errno_exception("VIDIOC_S_STD");
+            }
         }
-    }
         break;
-    case VIDEOSTANDARD_NTSC:
-    {
-        v4l2_std_id std_id = V4L2_STD_NTSC;
-        if (-1 == xioctl(VIDIOC_S_STD, &std_id))
+        case VIDEOSTANDARD_NTSC:
         {
-            throw_errno_exception("VIDIOC_S_STD");
+            v4l2_std_id std_id = V4L2_STD_NTSC;
+            if (-1 == xioctl(VIDIOC_S_STD, &std_id))
+            {
+                throw_errno_exception("VIDIOC_S_STD");
+            }
         }
-    }
         break;
-    case VIDEOSTANDARD_NO_CHANGE:
-    default:
-        // No change to device settings
-        break;
+        case VIDEOSTANDARD_NO_CHANGE:
+        default:
+            // No change to device settings
+            break;
     }
 
 
@@ -362,19 +383,19 @@ void V4L2Grabber::init_device(VideoStandard videoStandard, int input)
     // set the requested pixel format
     switch (_pixelFormat)
     {
-    case PIXELFORMAT_UYVY:
-        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_UYVY;
-        break;
-    case PIXELFORMAT_YUYV:
-        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
-        break;
-    case PIXELFORMAT_RGB32:
-        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB32;
-        break;
-    case PIXELFORMAT_NO_CHANGE:
-    default:
-        // No change to device settings
-        break;
+        case PIXELFORMAT_UYVY:
+            fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_UYVY;
+            break;
+        case PIXELFORMAT_YUYV:
+            fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
+            break;
+        case PIXELFORMAT_RGB32:
+            fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB32;
+            break;
+        case PIXELFORMAT_NO_CHANGE:
+        default:
+            // No change to device settings
+            break;
     }
 
     // set the requested withd and height
@@ -417,57 +438,59 @@ void V4L2Grabber::init_device(VideoStandard videoStandard, int input)
     // check pixel format and frame size
     switch (fmt.fmt.pix.pixelformat)
     {
-    case V4L2_PIX_FMT_UYVY:
-        _pixelFormat = PIXELFORMAT_UYVY;
-        _frameByteSize = _width * _height * 2;
-        std::cout << "V4L2 pixel format=UYVY" << std::endl;
-        break;
-    case V4L2_PIX_FMT_YUYV:
-        _pixelFormat = PIXELFORMAT_YUYV;
-        _frameByteSize = _width * _height * 2;
-        std::cout << "V4L2 pixel format=YUYV" << std::endl;
-        break;
-    case V4L2_PIX_FMT_RGB32:
-        _pixelFormat = PIXELFORMAT_RGB32;
-        _frameByteSize = _width * _height * 4;
-        std::cout << "V4L2 pixel format=RGB32" << std::endl;
-        break;
-    default:
-        throw_exception("Only pixel formats UYVY, YUYV, and RGB32 are supported");
+        case V4L2_PIX_FMT_UYVY:
+            _pixelFormat = PIXELFORMAT_UYVY;
+            _frameByteSize = _width * _height * 2;
+            std::cout << "V4L2 pixel format=UYVY" << std::endl;
+            break;
+        case V4L2_PIX_FMT_YUYV:
+            _pixelFormat = PIXELFORMAT_YUYV;
+            _frameByteSize = _width * _height * 2;
+            std::cout << "V4L2 pixel format=YUYV" << std::endl;
+            break;
+        case V4L2_PIX_FMT_RGB32:
+            _pixelFormat = PIXELFORMAT_RGB32;
+            _frameByteSize = _width * _height * 4;
+            std::cout << "V4L2 pixel format=RGB32" << std::endl;
+            break;
+        default:
+            throw_exception("Only pixel formats UYVY, YUYV, and RGB32 are supported");
     }
 
-    switch (_ioMethod) {
-    case IO_METHOD_READ:
-        init_read(fmt.fmt.pix.sizeimage);
-        break;
+    switch (_ioMethod)
+    {
+        case IO_METHOD_READ:
+            init_read(fmt.fmt.pix.sizeimage);
+            break;
 
-    case IO_METHOD_MMAP:
-        init_mmap();
-        break;
+        case IO_METHOD_MMAP:
+            init_mmap();
+            break;
 
-    case IO_METHOD_USERPTR:
-        init_userp(fmt.fmt.pix.sizeimage);
-        break;
+        case IO_METHOD_USERPTR:
+            init_userp(fmt.fmt.pix.sizeimage);
+            break;
     }
 }
 
 void V4L2Grabber::uninit_device()
 {
-    switch (_ioMethod) {
-    case IO_METHOD_READ:
-        free(_buffers[0].start);
-        break;
+    switch (_ioMethod)
+    {
+        case IO_METHOD_READ:
+            free(_buffers[0].start);
+            break;
 
-    case IO_METHOD_MMAP:
-        for (size_t i = 0; i < _buffers.size(); ++i)
-            if (-1 == munmap(_buffers[i].start, _buffers[i].length))
-                throw_errno_exception("munmap");
-        break;
+        case IO_METHOD_MMAP:
+            for (size_t i = 0; i < _buffers.size(); ++i)
+                if (-1 == munmap(_buffers[i].start, _buffers[i].length))
+                    throw_errno_exception("munmap");
+            break;
 
-    case IO_METHOD_USERPTR:
-        for (size_t i = 0; i < _buffers.size(); ++i)
-            free(_buffers[i].start);
-        break;
+        case IO_METHOD_USERPTR:
+            for (size_t i = 0; i < _buffers.size(); ++i)
+                free(_buffers[i].start);
+            break;
     }
 
     _buffers.resize(0);
@@ -475,49 +498,52 @@ void V4L2Grabber::uninit_device()
 
 void V4L2Grabber::start_capturing()
 {
-    switch (_ioMethod) {
-    case IO_METHOD_READ:
-        /* Nothing to do. */
-        break;
-
-    case IO_METHOD_MMAP:
+    switch (_ioMethod)
     {
-        for (size_t i = 0; i < _buffers.size(); ++i) {
-            struct v4l2_buffer buf;
+        case IO_METHOD_READ:
+            /* Nothing to do. */
+            break;
 
-            CLEAR(buf);
-            buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-            buf.memory = V4L2_MEMORY_MMAP;
-            buf.index = i;
+        case IO_METHOD_MMAP:
+        {
+            for (size_t i = 0; i < _buffers.size(); ++i)
+            {
+                struct v4l2_buffer buf;
 
-            if (-1 == xioctl(VIDIOC_QBUF, &buf))
-                throw_errno_exception("VIDIOC_QBUF");
+                CLEAR(buf);
+                buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+                buf.memory = V4L2_MEMORY_MMAP;
+                buf.index = i;
+
+                if (-1 == xioctl(VIDIOC_QBUF, &buf))
+                    throw_errno_exception("VIDIOC_QBUF");
+            }
+            v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            if (-1 == xioctl(VIDIOC_STREAMON, &type))
+                throw_errno_exception("VIDIOC_STREAMON");
+            break;
         }
-        v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        if (-1 == xioctl(VIDIOC_STREAMON, &type))
-            throw_errno_exception("VIDIOC_STREAMON");
-        break;
-    }
-    case IO_METHOD_USERPTR:
-    {
-        for (size_t i = 0; i < _buffers.size(); ++i) {
-            struct v4l2_buffer buf;
+        case IO_METHOD_USERPTR:
+        {
+            for (size_t i = 0; i < _buffers.size(); ++i)
+            {
+                struct v4l2_buffer buf;
 
-            CLEAR(buf);
-            buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-            buf.memory = V4L2_MEMORY_USERPTR;
-            buf.index = i;
-            buf.m.userptr = (unsigned long)_buffers[i].start;
-            buf.length = _buffers[i].length;
+                CLEAR(buf);
+                buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+                buf.memory = V4L2_MEMORY_USERPTR;
+                buf.index = i;
+                buf.m.userptr = (unsigned long)_buffers[i].start;
+                buf.length = _buffers[i].length;
 
-            if (-1 == xioctl(VIDIOC_QBUF, &buf))
-                throw_errno_exception("VIDIOC_QBUF");
+                if (-1 == xioctl(VIDIOC_QBUF, &buf))
+                    throw_errno_exception("VIDIOC_QBUF");
+            }
+            v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            if (-1 == xioctl(VIDIOC_STREAMON, &type))
+                throw_errno_exception("VIDIOC_STREAMON");
+            break;
         }
-        v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        if (-1 == xioctl(VIDIOC_STREAMON, &type))
-            throw_errno_exception("VIDIOC_STREAMON");
-        break;
-    }
     }
 }
 
@@ -525,17 +551,18 @@ void V4L2Grabber::stop_capturing()
 {
     enum v4l2_buf_type type;
 
-    switch (_ioMethod) {
-    case IO_METHOD_READ:
-        /* Nothing to do. */
-        break;
+    switch (_ioMethod)
+    {
+        case IO_METHOD_READ:
+            /* Nothing to do. */
+            break;
 
-    case IO_METHOD_MMAP:
-    case IO_METHOD_USERPTR:
-        type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        if (-1 == xioctl(VIDIOC_STREAMOFF, &type))
-            throw_errno_exception("VIDIOC_STREAMOFF");
-        break;
+        case IO_METHOD_MMAP:
+        case IO_METHOD_USERPTR:
+            type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            if (-1 == xioctl(VIDIOC_STREAMOFF, &type))
+                throw_errno_exception("VIDIOC_STREAMOFF");
+            break;
     }
 }
 
@@ -545,101 +572,102 @@ int V4L2Grabber::read_frame()
 
     struct v4l2_buffer buf;
 
-    switch (_ioMethod) {
-    case IO_METHOD_READ:
-        int size;
-        if ((size = read(_fileDescriptor, _buffers[0].start, _buffers[0].length)) == -1)
-        {
-            switch (errno)
+    switch (_ioMethod)
+    {
+        case IO_METHOD_READ:
+            int size;
+            if ((size = read(_fileDescriptor, _buffers[0].start, _buffers[0].length)) == -1)
             {
-            case EAGAIN:
-                return 0;
+                switch (errno)
+                {
+                    case EAGAIN:
+                        return 0;
 
-            case EIO:
-                /* Could ignore EIO, see spec. */
+                    case EIO:
+                    /* Could ignore EIO, see spec. */
 
-                /* fall through */
+                    /* fall through */
 
-            default:
-                throw_errno_exception("read");
+                    default:
+                        throw_errno_exception("read");
+                }
             }
-        }
 
-        rc = process_image(_buffers[0].start, size);
-        break;
+            rc = process_image(_buffers[0].start, size);
+            break;
 
-    case IO_METHOD_MMAP:
-        CLEAR(buf);
+        case IO_METHOD_MMAP:
+            CLEAR(buf);
 
-        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        buf.memory = V4L2_MEMORY_MMAP;
+            buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            buf.memory = V4L2_MEMORY_MMAP;
 
-        if (-1 == xioctl(VIDIOC_DQBUF, &buf))
-        {
-            switch (errno)
+            if (-1 == xioctl(VIDIOC_DQBUF, &buf))
             {
-            case EAGAIN:
-                return 0;
+                switch (errno)
+                {
+                    case EAGAIN:
+                        return 0;
 
-            case EIO:
-                /* Could ignore EIO, see spec. */
+                    case EIO:
+                    /* Could ignore EIO, see spec. */
 
-                /* fall through */
+                    /* fall through */
 
-            default:
-                throw_errno_exception("VIDIOC_DQBUF");
+                    default:
+                        throw_errno_exception("VIDIOC_DQBUF");
+                }
             }
-        }
 
-        assert(buf.index < _buffers.size());
+            assert(buf.index < _buffers.size());
 
-        rc = process_image(_buffers[buf.index].start, buf.bytesused);
+            rc = process_image(_buffers[buf.index].start, buf.bytesused);
 
-        if (-1 == xioctl(VIDIOC_QBUF, &buf))
-        {
-            throw_errno_exception("VIDIOC_QBUF");
-        }
-
-        break;
-
-    case IO_METHOD_USERPTR:
-        CLEAR(buf);
-
-        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        buf.memory = V4L2_MEMORY_USERPTR;
-
-        if (-1 == xioctl(VIDIOC_DQBUF, &buf))
-        {
-            switch (errno)
+            if (-1 == xioctl(VIDIOC_QBUF, &buf))
             {
-            case EAGAIN:
-                return 0;
-
-            case EIO:
-                /* Could ignore EIO, see spec. */
-
-                /* fall through */
-
-            default:
-                throw_errno_exception("VIDIOC_DQBUF");
+                throw_errno_exception("VIDIOC_QBUF");
             }
-        }
 
-        for (size_t i = 0; i < _buffers.size(); ++i)
-        {
-            if (buf.m.userptr == (unsigned long)_buffers[i].start && buf.length == _buffers[i].length)
+            break;
+
+        case IO_METHOD_USERPTR:
+            CLEAR(buf);
+
+            buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            buf.memory = V4L2_MEMORY_USERPTR;
+
+            if (-1 == xioctl(VIDIOC_DQBUF, &buf))
             {
-                break;
+                switch (errno)
+                {
+                    case EAGAIN:
+                        return 0;
+
+                    case EIO:
+                    /* Could ignore EIO, see spec. */
+
+                    /* fall through */
+
+                    default:
+                        throw_errno_exception("VIDIOC_DQBUF");
+                }
             }
-        }
 
-        rc = process_image((void *)buf.m.userptr, buf.bytesused);
+            for (size_t i = 0; i < _buffers.size(); ++i)
+            {
+                if (buf.m.userptr == (unsigned long)_buffers[i].start && buf.length == _buffers[i].length)
+                {
+                    break;
+                }
+            }
 
-        if (-1 == xioctl(VIDIOC_QBUF, &buf))
-        {
-            throw_errno_exception("VIDIOC_QBUF");
-        }
-        break;
+            rc = process_image((void *)buf.m.userptr, buf.bytesused);
+
+            if (-1 == xioctl(VIDIOC_QBUF, &buf))
+            {
+                throw_errno_exception("VIDIOC_QBUF");
+            }
+            break;
     }
 
     return rc ? 1 : 0;

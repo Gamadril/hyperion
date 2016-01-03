@@ -17,103 +17,103 @@
 class LedDeviceLightpack : public LedDevice
 {
 public:
-	///
-	/// Constructs the LedDeviceLightpack
-	///
-	LedDeviceLightpack();
+    ///
+    /// Constructs the LedDeviceLightpack
+    ///
+    LedDeviceLightpack();
 
-	///
-	/// Destructor of the LedDevice; closes the output device if it is open
-	///
-	virtual ~LedDeviceLightpack();
+    ///
+    /// Destructor of the LedDevice; closes the output device if it is open
+    ///
+    virtual ~LedDeviceLightpack();
 
-	///
-	/// Opens and configures the output device
-	///
-	/// @return Zero on succes else negative
-	///
-	int open(const std::string & serialNumber = "");
+    ///
+    /// Opens and configures the output device
+    ///
+    /// @return Zero on succes else negative
+    ///
+    int open(const std::string & serialNumber = "");
 
-	///
-	/// Writes the RGB-Color values to the leds.
-	///
-	/// @param[in] ledValues  The RGB-color per led
-	///
-	/// @return Zero on success else negative
-	///
-	virtual int write(const std::vector<ColorRgb>& ledValues);
+    ///
+    /// Writes the RGB-Color values to the leds.
+    ///
+    /// @param[in] ledValues  The RGB-color per led
+    ///
+    /// @return Zero on success else negative
+    ///
+    virtual int write(const std::vector<ColorRgb>& ledValues);
 
-	///
-	/// Writes the RGB-Color values to the leds.
-	///
-	/// @param[in] ledValues  Array of RGB values
-	/// @param[in] size       The number of RGB values
-	///
-	/// @return Zero on success else negative
-	///
-	int write(const ColorRgb * ledValues, int size);
+    ///
+    /// Writes the RGB-Color values to the leds.
+    ///
+    /// @param[in] ledValues  Array of RGB values
+    /// @param[in] size       The number of RGB values
+    ///
+    /// @return Zero on success else negative
+    ///
+    int write(const ColorRgb * ledValues, int size);
 
-	///
-	/// Switch the leds off
-	///
-	/// @return Zero on success else negative
-	///
-	virtual int switchOff();
+    ///
+    /// Switch the leds off
+    ///
+    /// @return Zero on success else negative
+    ///
+    virtual int switchOff();
 
-	/// Get the serial of the Lightpack
-	const std::string & getSerialNumber() const;
+    /// Get the serial of the Lightpack
+    const std::string & getSerialNumber() const;
 
-	/// Get the number of leds
-	int getLedCount() const;
-
-private:
-	///
-	/// Test if the device is a (or the) lightpack we are looking for
-	///
-	/// @return Zero on succes else negative
-	///
-	int testAndOpen(libusb_device * device, const std::string & requestedSerialNumber);
-
-	/// write bytes to the device
-	int writeBytes(uint8_t *data, int size);
-
-	/// Disable the internal smoothing on the Lightpack device
-	int disableSmoothing();
-
-	struct Version
-	{
-		int majorVersion;
-		int minorVersion;
-	};
-
-	static libusb_device_handle * openDevice(libusb_device * device);
-	static std::string getString(libusb_device * device, int stringDescriptorIndex);
+    /// Get the number of leds
+    int getLedCount() const;
 
 private:
-	/// libusb context
-	libusb_context * _libusbContext;
+    ///
+    /// Test if the device is a (or the) lightpack we are looking for
+    ///
+    /// @return Zero on succes else negative
+    ///
+    int testAndOpen(libusb_device * device, const std::string & requestedSerialNumber);
 
-	/// libusb device handle
-	libusb_device_handle * _deviceHandle;
+    /// write bytes to the device
+    int writeBytes(uint8_t *data, int size);
 
-	/// harware bus number
-	int _busNumber;
+    /// Disable the internal smoothing on the Lightpack device
+    int disableSmoothing();
 
-	/// hardware address number
-	int  _addressNumber;
+    struct Version
+    {
+        int majorVersion;
+        int minorVersion;
+    };
 
-	/// device serial number
-	std::string _serialNumber;
+    static libusb_device_handle * openDevice(libusb_device * device);
+    static std::string getString(libusb_device * device, int stringDescriptorIndex);
 
-	/// firmware version of the device
-	Version _firmwareVersion;
+private:
+    /// libusb context
+    libusb_context * _libusbContext;
 
-	/// the number of leds of the device
-	int _ledCount;
+    /// libusb device handle
+    libusb_device_handle * _deviceHandle;
 
-	/// the number of bits per channel
-	int _bitsPerChannel;
+    /// harware bus number
+    int _busNumber;
 
-	/// buffer for led data
-	std::vector<uint8_t> _ledBuffer;
+    /// hardware address number
+    int  _addressNumber;
+
+    /// device serial number
+    std::string _serialNumber;
+
+    /// firmware version of the device
+    Version _firmwareVersion;
+
+    /// the number of leds of the device
+    int _ledCount;
+
+    /// the number of bits per channel
+    int _bitsPerChannel;
+
+    /// buffer for led data
+    std::vector<uint8_t> _ledBuffer;
 };

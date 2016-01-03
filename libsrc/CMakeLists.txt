@@ -1,19 +1,25 @@
-
-# Define the current source locations
-SET(CURRENT_HEADER_DIR ${CMAKE_SOURCE_DIR}/include)
-SET(CURRENT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/libsrc)
-
 add_subdirectory(hyperion)
 add_subdirectory(blackborder)
-add_subdirectory(jsonserver)
 
-if (ENABLE_PROTOBUF)
-	add_subdirectory(protoserver)
-endif (ENABLE_PROTOBUF)
+if (ENABLE_SERVER_JSON)
+    add_subdirectory(jsonserver)
+endif ()
 
-add_subdirectory(boblightserver)
+if (ENABLE_SERVER_BOBLIGHT)
+    add_subdirectory(boblightserver)
+endif ()
+
 add_subdirectory(leddevice)
 add_subdirectory(utils)
-add_subdirectory(xbmcvideochecker)
-add_subdirectory(effectengine)
-add_subdirectory(grabber)
+
+if (ENABLE_KODI_CONNECTION)
+    add_subdirectory(kodiconnector)
+endif ()
+
+if (ENABLE_EFFECT_ENGINE)
+    add_subdirectory(effectengine)
+endif ()
+
+if (ENABLE_GRABBER)
+    add_subdirectory(grabber)
+endif ()

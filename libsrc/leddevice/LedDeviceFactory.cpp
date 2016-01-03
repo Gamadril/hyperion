@@ -2,276 +2,319 @@
 #include <string>
 #include <algorithm>
 
-// Build configuration
-#include <HyperionConfig.h>
+#include "HyperionConfig.h"
 
 // Leddevice includes
-#include <leddevice/LedDeviceFactory.h>
+#include "leddevice/LedDeviceFactory.h"
 
-// Local Leddevice includes
-#ifdef ENABLE_SPIDEV
-	#include "LedDeviceLpd6803.h"
-	#include "LedDeviceLpd8806.h"
-	#include "LedDeviceP9813.h"
-	#include "LedDeviceWs2801.h"
-	#include "LedDeviceAPA102.h"
-#endif
-
-#ifdef ENABLE_TINKERFORGE
-	#include "LedDeviceTinkerforge.h"
-#endif
-
-#include "LedDeviceAdalight.h"
-#include "LedDeviceAmbiLed.h"
-#include "LedDeviceRawHID.h"
-#include "LedDeviceLightpack.h"
-#include "LedDeviceMultiLightpack.h"
-#include "LedDevicePaintpack.h"
-#include "LedDevicePiBlaster.h"
-#include "LedDeviceSedu.h"
 #include "LedDeviceTest.h"
+
+#ifdef ENABLE_LED_LPD6803
+#include "LedDeviceLpd6803.h"
+#endif
+#ifdef ENABLE_LED_LPD8806
+#include "LedDeviceLpd8806.h"
+#endif
+#ifdef ENABLE_LED_P9813
+#include "LedDeviceP9813.h"
+#endif
+#ifdef ENABLE_LED_WS2801
+#include "LedDeviceWs2801.h"
+#endif
+#ifdef ENABLE_LED_APA102
+#include "LedDeviceAPA102.h"
+#endif
+#ifdef ENABLE_LED_TINKERFORGE
+#include "LedDeviceTinkerforge.h"
+#endif
+#ifdef ENABLE_LED_ADALIGHT
+#include "LedDeviceAdalight.h"
+#endif
+#ifdef ENABLE_LED_AMBILED
+#include "LedDeviceAmbiLed.h"
+#endif
+#ifdef ENABLE_LED_LIGHTPACK
+#include "LedDeviceLightpack.h"
+#endif
+#ifdef ENABLE_LED_MULTILIGHTPACK
+#include "LedDeviceMultiLightpack.h"
+#endif
+#ifdef ENABLE_LED_PAINTPACK
+#include "LedDevicePaintpack.h"
+#endif
+#ifdef ENABLE_LED_PIBLASTER
+#include "LedDevicePiBlaster.h"
+#endif
+#ifdef ENABLE_LED_SEDU
+#include "LedDeviceSedu.h"
+#endif
+#ifdef ENABLE_LED_USBASP
 #include "LedDeviceHyperionUsbasp.h"
+#endif
+#ifdef ENABLE_LED_PHILIPSHUE
 #include "LedDevicePhilipsHue.h"
-#include "LedDeviceTpm2.h"
+#endif
+#ifdef ENABLE_LED_SERIAL_TPM2
+#include "LedDeviceTpm2Serial.h"
+#endif
+#ifdef ENABLE_LED_ATMO
 #include "LedDeviceAtmo.h"
-#include "LedDeviceAdalightApa102.h"
-
-#ifdef ENABLE_WS2812BPWM
-	#include "LedDeviceWS2812b.h"
+#endif
+#ifdef ENABLE_LED_WS2812B_PWM
+#include "LedDeviceWS2812b.h"
+#endif
+#ifdef ENABLE_LED_TCPSOCKET_TPM2
+#include "LedDeviceTpm2TcpSocket.h"
 #endif
 
-LedDevice * LedDeviceFactory::construct(const Json::Value & deviceConfig)
+LedDevice * LedDeviceFactory::construct(const Poco::DynamicStruct & deviceConfig)
 {
-	std::cout << "Device configuration: " << deviceConfig << std::endl;
+    std::cout << "Device configuration: " << ((Poco::DynamicStruct)deviceConfig).toString() << std::endl;
 
-	std::string type = deviceConfig.get("type", "UNSPECIFIED").asString();
-	std::transform(type.begin(), type.end(), type.begin(), ::tolower);
+    std::string type = deviceConfig["type"];
+    std::transform(type.begin(), type.end(), type.begin(), ::tolower);
 
-	LedDevice* device = nullptr;
-	if (false) {}
-	else if (type == "adalight")
+    LedDevice* device = nullptr;
+	
+	if (type == "test")
 	{
-		const std::string output = deviceConfig["output"].asString();
-		const unsigned rate      = deviceConfig["rate"].asInt();
-		const int delay_ms       = deviceConfig["delayAfterConnect"].asInt();
-
-		LedDeviceAdalight* deviceAdalight = new LedDeviceAdalight(output, rate, delay_ms);
-		deviceAdalight->open();
-
-		device = deviceAdalight;
+		const std::string output = deviceConfig["output"];
+	    device = new LedDeviceTest(output);
 	}
-	else if (type == "adalightapa102")
-	{
-		const std::string output = deviceConfig["output"].asString();
-		const unsigned rate      = deviceConfig["rate"].asInt();
-		const int delay_ms       = deviceConfig["delayAfterConnect"].asInt();
+#ifdef ENABLE_LED_ADALIGHT	
+    else if (type == "adalight")
+    {
+        const std::string output = deviceConfig["output"];
+        const unsigned rate      = deviceConfig["rate"];
+        const int delay_ms       = deviceConfig["delayAfterConnect"];
 
-		LedDeviceAdalightApa102* deviceAdalightApa102 = new LedDeviceAdalightApa102(output, rate, delay_ms);
-		deviceAdalightApa102->open();
+        LedDeviceAdalight* deviceAdalight = new LedDeviceAdalight(output, rate, delay_ms);
+        deviceAdalight->open();
 
-		device = deviceAdalightApa102;
-	}
-	else if (type == "ambiled")
-	{
-		const std::string output = deviceConfig["output"].asString();
-		const unsigned rate      = deviceConfig["rate"].asInt();
-		const int delay_ms       = deviceConfig["delayAfterConnect"].asInt();
-
-		LedDeviceAmbiLed* deviceAmbiLed = new LedDeviceAmbiLed(output, rate, delay_ms);
-		deviceAmbiLed->open();
-
-		device = deviceAmbiLed;
-	}
-#ifdef ENABLE_SPIDEV
-	else if (type == "lpd6803" || type == "ldp6803")
-	{
-		const std::string output = deviceConfig["output"].asString();
-		const unsigned rate      = deviceConfig["rate"].asInt();
-
-		LedDeviceLpd6803* deviceLdp6803 = new LedDeviceLpd6803(output, rate);
-		deviceLdp6803->open();
-
-		device = deviceLdp6803;
-	}
-	else if (type == "lpd8806" || type == "ldp8806")
-	{
-		const std::string output = deviceConfig["output"].asString();
-		const unsigned rate      = deviceConfig["rate"].asInt();
-
-		LedDeviceLpd8806* deviceLpd8806 = new LedDeviceLpd8806(output, rate);
-		deviceLpd8806->open();
-
-		device = deviceLpd8806;
-	}
-	else if (type == "p9813")
-	{
-		const std::string output = deviceConfig["output"].asString();
-		const unsigned rate      = deviceConfig["rate"].asInt();
-
-		LedDeviceP9813* deviceP9813 = new LedDeviceP9813(output, rate);
-		deviceP9813->open();
-
-		device = deviceP9813;
-	}
-	else if (type == "apa102")
-	{
-		const std::string output = deviceConfig["output"].asString();
-		const unsigned rate      = deviceConfig["rate"].asInt();
-
-		LedDeviceAPA102* deviceAPA102 = new LedDeviceAPA102(output, rate);
-		deviceAPA102->open();
-
-		device = deviceAPA102;
-	}
-	else if (type == "ws2801" || type == "lightberry")
-	{
-		const std::string output = deviceConfig["output"].asString();
-		const unsigned rate      = deviceConfig["rate"].asInt();
-
-		LedDeviceWs2801* deviceWs2801 = new LedDeviceWs2801(output, rate);
-		deviceWs2801->open();
-
-		device = deviceWs2801;
-	}
+        device = deviceAdalight;
+    }
 #endif
-#ifdef ENABLE_TINKERFORGE
-	else if (type=="tinkerforge")
-	{
-		const std::string host 	= deviceConfig.get("output", "127.0.0.1").asString();
-		const uint16_t port 		= deviceConfig.get("port", 4223).asInt();
-		const std::string  uid		= deviceConfig["uid"].asString();
-		const unsigned rate 	= deviceConfig["rate"].asInt();
+#ifdef ENABLE_LED_AMBILED	
+    else if (type == "ambiled")
+    {
+        const std::string output = deviceConfig["output"];
+        const unsigned rate      = deviceConfig["rate"];
+        const int delay_ms       = deviceConfig["delayAfterConnect"];
 
-		LedDeviceTinkerforge* deviceTinkerforge = new LedDeviceTinkerforge(host, port, uid, rate);
-		deviceTinkerforge->open();
+        LedDeviceAmbiLed* deviceAmbiLed = new LedDeviceAmbiLed(output, rate, delay_ms);
+        deviceAmbiLed->open();
 
-		device = deviceTinkerforge;
-	}
+        device = deviceAmbiLed;
+    }
 #endif
-	else if (type == "rawhid")
+#ifdef ENABLE_LED_LPD6803
+    else if (type == "lpd6803")
+    {
+        const std::string output = deviceConfig["output"];
+        const unsigned rate      = deviceConfig["rate"];
+
+        LedDeviceLpd6803* deviceLdp6803 = new LedDeviceLpd6803(output, rate);
+        deviceLdp6803->open();
+
+        device = deviceLdp6803;
+    }
+#endif
+#ifdef ENABLE_LED_LPD8806
+    else if (type == "lpd8806")
+    {
+        const std::string output = deviceConfig["output"];
+        const unsigned rate      = deviceConfig["rate"];
+
+        LedDeviceLpd8806* deviceLpd8806 = new LedDeviceLpd8806(output, rate);
+        deviceLpd8806->open();
+
+        device = deviceLpd8806;
+    }
+#endif
+#ifdef ENABLE_LED_P9813
+    else if (type == "p9813")
+    {
+        const std::string output = deviceConfig["output"];
+        const unsigned rate      = deviceConfig["rate"];
+
+        LedDeviceP9813* deviceP9813 = new LedDeviceP9813(output, rate);
+        deviceP9813->open();
+
+        device = deviceP9813;
+    }
+#endif
+#ifdef ENABLE_LED_APA102
+    else if (type == "apa102")
+    {
+        const std::string output = deviceConfig["output"];
+        const unsigned rate      = deviceConfig["rate"];
+
+        LedDeviceAPA102* deviceAPA102 = new LedDeviceAPA102(output, rate);
+        deviceAPA102->open();
+
+        device = deviceAPA102;
+    }
+#endif
+#ifdef ENABLE_LED_WS2801
+    else if (type == "ws2801" || type == "lightberry")
+    {
+        const std::string output = deviceConfig["output"];
+        const unsigned rate      = deviceConfig["rate"];
+
+        LedDeviceWs2801* deviceWs2801 = new LedDeviceWs2801(output, rate);
+        deviceWs2801->open();
+
+        device = deviceWs2801;
+    }
+#endif
+#ifdef ENABLE_LED_TINKERFORGE
+    else if (type=="tinkerforge")
+    {
+        std::string host = "127.0.0.1";
+        if (!deviceConfig["output"].isEmpty())
+            host = deviceConfig["output"].toString();
+        uint16_t port = 4223;
+        if (!deviceConfig["port"].isEmpty())
+            port = deviceConfig["port"];
+        std::string uid = deviceConfig["uid"];
+        unsigned rate = deviceConfig["rate"];
+
+        LedDeviceTinkerforge* deviceTinkerforge = new LedDeviceTinkerforge(host, port, uid, rate);
+        deviceTinkerforge->open();
+
+        device = deviceTinkerforge;
+    }
+#endif
+#ifdef ENABLE_LED_LIGHTPACK
+    else if (type == "lightpack")
+    {
+        const std::string output = deviceConfig["output"];
+
+        LedDeviceLightpack* deviceLightpack = new LedDeviceLightpack();
+        deviceLightpack->open(output);
+
+        device = deviceLightpack;
+    }
+#endif
+#ifdef ENABLE_LED_MULTILIGHTPACK
+    else if (type == "multi-lightpack")
+    {
+        LedDeviceMultiLightpack* deviceLightpack = new LedDeviceMultiLightpack();
+        deviceLightpack->open();
+
+        device = deviceLightpack;
+    }
+#endif
+#ifdef ENABLE_LED_PAINTPACK
+    else if (type == "paintpack")
+    {
+        LedDevicePaintpack * devicePainLightpack = new LedDevicePaintpack();
+        devicePainLightpack->open();
+
+        device = devicePainLightpack;
+    }
+#endif
+#ifdef ENABLE_LED_PIBLASTER
+    else if (type == "piblaster")
+    {
+        const std::string output     = deviceConfig["output"];
+        const std::string assignment = deviceConfig["assignment"];
+
+        LedDevicePiBlaster * devicePiBlaster = new LedDevicePiBlaster(output, assignment);
+        devicePiBlaster->open();
+
+        device = devicePiBlaster;
+    }
+#endif
+#ifdef ENABLE_LED_SEDU
+    else if (type == "sedu")
+    {
+        const std::string output = deviceConfig["output"];
+        const unsigned rate      = deviceConfig["rate"];
+
+        LedDeviceSedu* deviceSedu = new LedDeviceSedu(output, rate);
+        deviceSedu->open();
+
+        device = deviceSedu;
+    }
+#endif
+#ifdef ENABLE_LED_USBASP
+    else if (type == "hyperion-usbasp-ws2801")
+    {
+        LedDeviceHyperionUsbasp * deviceHyperionUsbasp = new LedDeviceHyperionUsbasp(LedDeviceHyperionUsbasp::CMD_WRITE_WS2801);
+        deviceHyperionUsbasp->open();
+        device = deviceHyperionUsbasp;
+    }
+    else if (type == "hyperion-usbasp-ws2812")
+    {
+        LedDeviceHyperionUsbasp * deviceHyperionUsbasp = new LedDeviceHyperionUsbasp(LedDeviceHyperionUsbasp::CMD_WRITE_WS2812);
+        deviceHyperionUsbasp->open();
+        device = deviceHyperionUsbasp;
+    }
+#endif
+#ifdef ENABLE_LED_PHILIPSHUE
+    else if (type == "philipshue")
 	{
-		const int delay_ms        = deviceConfig["delayAfterConnect"].asInt();
-		auto VendorIdString       = deviceConfig.get("VID", "0x2341").asString();
-		auto ProductIdString      = deviceConfig.get("PID", "0x8036").asString();
-
-		// Convert HEX values to integer
-		auto VendorId = std::stoul(VendorIdString, nullptr, 16);
-		auto ProductId = std::stoul(ProductIdString, nullptr, 16);
-
-		LedDeviceRawHID* deviceHID = new LedDeviceRawHID(VendorId, ProductId, delay_ms);
-		deviceHID->open();
-
-		device = deviceHID;
-	}
-	else if (type == "lightpack")
-	{
-		const std::string output = deviceConfig.get("output", "").asString();
-
-		LedDeviceLightpack* deviceLightpack = new LedDeviceLightpack();
-		deviceLightpack->open(output);
-
-		device = deviceLightpack;
-	}
-	else if (type == "multi-lightpack")
-	{
-		LedDeviceMultiLightpack* deviceLightpack = new LedDeviceMultiLightpack();
-		deviceLightpack->open();
-
-		device = deviceLightpack;
-	}
-	else if (type == "paintpack")
-	{
-		const int delay_ms        = deviceConfig["delayAfterConnect"].asInt();
-		auto VendorIdString       = deviceConfig.get("VID", "0x0EBF").asString();
-		auto ProductIdString      = deviceConfig.get("PID", "0x0025").asString();
-
-		// Convert HEX values to integer
-		auto VendorId = std::stoul(VendorIdString, nullptr, 16);
-		auto ProductId = std::stoul(ProductIdString, nullptr, 16);
-
-		LedDevicePaintpack * devicePainLightpack = new LedDevicePaintpack(VendorId, ProductId, delay_ms);
-		devicePainLightpack->open();
-
-		device = devicePainLightpack;
-	}
-	else if (type == "piblaster")
-	{
-		const std::string output     = deviceConfig.get("output",     "").asString();
-		const std::string assignment = deviceConfig.get("assignment", "").asString();
-
-		LedDevicePiBlaster * devicePiBlaster = new LedDevicePiBlaster(output, assignment);
-		devicePiBlaster->open();
-
-		device = devicePiBlaster;
-	}
-	else if (type == "sedu")
-	{
-		const std::string output = deviceConfig["output"].asString();
-		const unsigned rate      = deviceConfig["rate"].asInt();
-
-		LedDeviceSedu* deviceSedu = new LedDeviceSedu(output, rate);
-		deviceSedu->open();
-
-		device = deviceSedu;
-	}
-	else if (type == "hyperion-usbasp-ws2801")
-	{
-			LedDeviceHyperionUsbasp * deviceHyperionUsbasp = new LedDeviceHyperionUsbasp(LedDeviceHyperionUsbasp::CMD_WRITE_WS2801);
-			deviceHyperionUsbasp->open();
-			device = deviceHyperionUsbasp;
-	}
-	else if (type == "hyperion-usbasp-ws2812")
-	{
-			LedDeviceHyperionUsbasp * deviceHyperionUsbasp = new LedDeviceHyperionUsbasp(LedDeviceHyperionUsbasp::CMD_WRITE_WS2812);
-			deviceHyperionUsbasp->open();
-			device = deviceHyperionUsbasp;
-	}
-	else if (type == "philipshue")
-	{
-		const std::string output = deviceConfig["output"].asString();
-		const std::string username = deviceConfig.get("username", "newdeveloper").asString();
-		const bool switchOffOnBlack = deviceConfig.get("switchOffOnBlack", true).asBool();
-		const int transitiontime = deviceConfig.get("transitiontime", 1).asInt();
+		std::string output = deviceConfig["output"];
+		std::string username = "newdeveloper";
+		if (!deviceConfig["username"].isEmpty())
+			username = deviceConfig["username"].toString();
+		bool switchOffOnBlack = true;
+		if (!deviceConfig["switchOffOnBlack"].isEmpty())
+			 switchOffOnBlack = deviceConfig["switchOffOnBlack"];
+		int transitiontime = 1;
+		if (!deviceConfig["transitiontime"].isEmpty())
+			 transitiontime = deviceConfig["transitiontime"];
 		std::vector<unsigned int> lightIds;
-		for (Json::Value::ArrayIndex i = 0; i < deviceConfig["lightIds"].size(); i++) {
-			lightIds.push_back(deviceConfig["lightIds"][i].asInt());
+		for (unsigned i = 0; i < deviceConfig["lightIds"].size(); i++) {
+			lightIds.push_back(deviceConfig["lightIds"][i]);
 		}
 		device = new LedDevicePhilipsHue(output, username, switchOffOnBlack, transitiontime, lightIds);
 	}
-	else if (type == "test")
-	{
-		const std::string output = deviceConfig["output"].asString();
-		device = new LedDeviceTest(output);
-	}
-	else if (type == "tpm2")
-	{
-		const std::string output = deviceConfig["output"].asString();
-		const unsigned rate = deviceConfig["rate"].asInt();
-
-		LedDeviceTpm2 * deviceTpm2 = new LedDeviceTpm2(output, rate);
-		deviceTpm2->open();
-		device = deviceTpm2;
-	}
-	else if (type == "atmo")
-	{
-		const std::string output = deviceConfig["output"].asString();
-		const unsigned rate = 38400;
-
-		LedDeviceAtmo * deviceAtmo = new LedDeviceAtmo(output, rate);
-		deviceAtmo->open();
-		device = deviceAtmo;
-	}
-#ifdef ENABLE_WS2812BPWM
-	else if (type == "ws2812b")
-	{
-		LedDeviceWS2812b * ledDeviceWS2812b = new LedDeviceWS2812b();
-		device = ledDeviceWS2812b;
-	}
 #endif
-	else
-	{
-		std::cout << "Unable to create device " << type << std::endl;
-		// Unknown / Unimplemented device
-	}
-	return device;
+#ifdef ENABLE_LED_SERIAL_TPM2
+    else if (type == "tpm2ser")
+    {
+        const std::string output = deviceConfig["output"];
+        const unsigned rate = deviceConfig["rate"];
+
+        LedDeviceTpm2Serial * deviceTpm2 = new LedDeviceTpm2Serial(output, rate);
+        deviceTpm2->open();
+		device = deviceTpm2;
+    }
+#endif
+#ifdef ENABLE_LED_ATMO
+    else if (type == "atmo")
+    {
+        const std::string output = deviceConfig["output"];
+        const unsigned rate = 38400;
+
+        LedDeviceAtmo * deviceAtmo = new LedDeviceAtmo(output, rate);
+        deviceAtmo->open();
+        device = deviceAtmo;
+    }
+#endif
+#ifdef ENABLE_LED_WS2812B_PWM
+    else if (type == "ws2812b")
+    {
+        LedDeviceWS2812b * ledDeviceWS2812b = new LedDeviceWS2812b();
+        device = ledDeviceWS2812b;
+    }
+#endif
+#ifdef ENABLE_LED_TCPSOCKET_TPM2
+    else if (type == "tpm2tcp")
+    {
+        const std::string output = deviceConfig["output"];
+
+        LedDeviceTpm2TcpSocket * deviceTpm2 = new LedDeviceTpm2TcpSocket(output);
+        deviceTpm2->open();
+        device = deviceTpm2;
+    }
+#endif
+    else
+    {
+        std::cout << "Unable to create device " << type << std::endl;
+        // Unknown / Unimplemented device
+    }
+    return device;
 }

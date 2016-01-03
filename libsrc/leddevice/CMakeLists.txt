@@ -1,131 +1,107 @@
-
-# Define the current source locations
-SET(CURRENT_HEADER_DIR ${CMAKE_SOURCE_DIR}/include/leddevice)
-SET(CURRENT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/libsrc/leddevice)
-
 #add libusb and pthreads (required for the Lighpack usb device)
-find_package(libusb-1.0 REQUIRED)
-find_package(Threads REQUIRED)
+#find_package(libusb-1.0 REQUIRED)
+#find_package(Threads REQUIRED)
 
 include_directories(
-		../../include/hidapi
-		${LIBUSB_1_INCLUDE_DIRS}) # for Lightpack device
-
-# Group the headers that go through the MOC compiler
-SET(Leddevice_QT_HEADERS
-		${CURRENT_SOURCE_DIR}/LedRs232Device.h
-		${CURRENT_SOURCE_DIR}/LedDeviceAdalight.h
-		${CURRENT_SOURCE_DIR}/LedDeviceAdalightApa102.h
-		${CURRENT_SOURCE_DIR}/LedDeviceAmbiLed.h
-		${CURRENT_SOURCE_DIR}/LedDevicePhilipsHue.h
-		${CURRENT_SOURCE_DIR}/LedHIDDevice.h
-		${CURRENT_SOURCE_DIR}/LedDeviceRawHID.h
+#		../../include/hidapi
+#		${LIBUSB_1_INCLUDE_DIRS} # for Lightpack device
 )
 
-SET(Leddevice_HEADERS
-		${CURRENT_HEADER_DIR}/LedDevice.h
-		${CURRENT_HEADER_DIR}/LedDeviceFactory.h
+set(Leddevice_SOURCES
+		LedDeviceFactory.cpp
+		LedDeviceTest.cpp
 
-		${CURRENT_SOURCE_DIR}/LedDeviceLightpack.h
-		${CURRENT_SOURCE_DIR}/LedDeviceMultiLightpack.h
-		${CURRENT_SOURCE_DIR}/LedDevicePaintpack.h
-		${CURRENT_SOURCE_DIR}/LedDevicePiBlaster.h
-		${CURRENT_SOURCE_DIR}/LedDeviceSedu.h
-		${CURRENT_SOURCE_DIR}/LedDeviceTest.h
-		${CURRENT_SOURCE_DIR}/LedDeviceHyperionUsbasp.h
-		${CURRENT_SOURCE_DIR}/LedDeviceTpm2.h
-		${CURRENT_SOURCE_DIR}/LedDeviceAtmo.h
+#		${CURRENT_SOURCE_DIR}/LedDeviceLightpack.cpp
+#		${CURRENT_SOURCE_DIR}/LedDeviceMultiLightpack.cpp
+#		${CURRENT_SOURCE_DIR}/LedDevicePaintpack.cpp
+#		${CURRENT_SOURCE_DIR}/LedDevicePiBlaster.cpp		
+#		${CURRENT_SOURCE_DIR}/LedDeviceHyperionUsbasp.cpp
+#		${CURRENT_SOURCE_DIR}/LedDevicePhilipsHue.cpp
 )
 
-SET(Leddevice_SOURCES
-		${CURRENT_SOURCE_DIR}/LedDeviceFactory.cpp
+if(ENABLE_LED_SERIAL)
+	list(APPEND Leddevice_SOURCES LedRs232Device.cpp)
+endif()
 
-		${CURRENT_SOURCE_DIR}/LedRs232Device.cpp
-		${CURRENT_SOURCE_DIR}/LedHIDDevice.cpp
+if(ENABLE_LED_TCPSOCKET)
+	list(APPEND Leddevice_SOURCES TcpSocketDevice.cpp)
+endif()
 
-		${CURRENT_SOURCE_DIR}/LedDeviceAdalight.cpp
-		${CURRENT_SOURCE_DIR}/LedDeviceAdalightApa102.cpp
-		${CURRENT_SOURCE_DIR}/LedDeviceAmbiLed.cpp
-		${CURRENT_SOURCE_DIR}/LedDeviceRawHID.cpp
-		${CURRENT_SOURCE_DIR}/LedDeviceLightpack.cpp
-		${CURRENT_SOURCE_DIR}/LedDeviceMultiLightpack.cpp
-		${CURRENT_SOURCE_DIR}/LedDevicePaintpack.cpp
-		${CURRENT_SOURCE_DIR}/LedDevicePiBlaster.cpp
-		${CURRENT_SOURCE_DIR}/LedDeviceSedu.cpp
-		${CURRENT_SOURCE_DIR}/LedDeviceTest.cpp
-		${CURRENT_SOURCE_DIR}/LedDeviceHyperionUsbasp.cpp
-		${CURRENT_SOURCE_DIR}/LedDevicePhilipsHue.cpp
-		${CURRENT_SOURCE_DIR}/LedDeviceTpm2.cpp
-		${CURRENT_SOURCE_DIR}/LedDeviceAtmo.cpp
-)
+if(ENABLE_LED_SERIAL_TPM2)
+	list(APPEND Leddevice_SOURCES LedDeviceTpm2Serial.cpp)
+endif()
 
-if(ENABLE_SPIDEV)
-	SET(Leddevice_HEADERS
-			${Leddevice_HEADERS}
-			${CURRENT_SOURCE_DIR}/LedSpiDevice.h
-			${CURRENT_SOURCE_DIR}/LedDeviceLpd6803.h
-			${CURRENT_SOURCE_DIR}/LedDeviceLpd8806.h
-			${CURRENT_SOURCE_DIR}/LedDeviceP9813.h
-			${CURRENT_SOURCE_DIR}/LedDeviceWs2801.h
-			${CURRENT_SOURCE_DIR}/LedDeviceAPA102.h
-	)
-	SET(Leddevice_SOURCES
-			${Leddevice_SOURCES}
-			${CURRENT_SOURCE_DIR}/LedSpiDevice.cpp
-			${CURRENT_SOURCE_DIR}/LedDeviceLpd6803.cpp
-			${CURRENT_SOURCE_DIR}/LedDeviceLpd8806.cpp
-			${CURRENT_SOURCE_DIR}/LedDeviceP9813.cpp
-			${CURRENT_SOURCE_DIR}/LedDeviceWs2801.cpp
-			${CURRENT_SOURCE_DIR}/LedDeviceAPA102.cpp
-	)
-endif(ENABLE_SPIDEV)
+if(ENABLE_LED_ADALIGHT)
+	list(APPEND Leddevice_SOURCES LedDeviceAdalight.cpp)
+endif()
 
-if(ENABLE_WS2812BPWM)
-SET(Leddevice_HEADERS
-		${Leddevice_HEADERS}
-		${CURRENT_SOURCE_DIR}/LedDeviceWS2812b.h
-	)
-SET(Leddevice_SOURCES
-		${Leddevice_SOURCES}
-		${CURRENT_SOURCE_DIR}/LedDeviceWS2812b.cpp
-)
-endif(ENABLE_WS2812BPWM)
+if(ENABLE_LED_AMBILED)
+	list(APPEND Leddevice_SOURCES LedDeviceAmbiLed.cpp)
+endif()
 
-if(ENABLE_TINKERFORGE)
-	SET(Leddevice_HEADERS
-			${Leddevice_HEADERS}
-			${CURRENT_SOURCE_DIR}/LedDeviceTinkerforge.h
-	)
-	SET(Leddevice_SOURCES
-			${Leddevice_SOURCES}
-			${CURRENT_SOURCE_DIR}/LedDeviceTinkerforge.cpp
-	)
-endif(ENABLE_TINKERFORGE)
+if(ENABLE_LED_ATMOLIGHT)
+	list(APPEND Leddevice_SOURCES LedDeviceAtmo.cpp)
+endif()
 
+if(ENABLE_LED_SEDU)
+	list(APPEND Leddevice_SOURCES LedDeviceSedu.cpp)
+endif()
 
-QT4_WRAP_CPP(Leddevice_HEADERS_MOC ${Leddevice_QT_HEADERS})
+if(ENABLE_LED_TCPSOCKET_TPM2)
+	list(APPEND Leddevice_SOURCES LedDeviceTpm2TcpSocket.cpp)
+endif()
+
+if(ENABLE_LED_APA102 OR ENABLE_LED_LPD6803 OR ENABLE_LED_LPD8806 OR ENABLE_LED_P9813 OR ENABLE_LED_WS2801)
+	list(APPEND Leddevice_SOURCES LedSpiDevice.cpp)
+endif()
+
+if(ENABLE_LED_APA102)
+	list(APPEND Leddevice_SOURCES LedDeviceAPA102.cpp)
+endif()
+
+if(ENABLE_LED_LPD6803)
+	list(APPEND Leddevice_SOURCES LedDeviceLpd6803.cpp)
+endif()
+
+if(ENABLE_LED_LPD8806)
+	list(APPEND Leddevice_SOURCES LedDeviceLpd8806.cpp)
+endif()
+
+if(ENABLE_LED_P9813)
+	list(APPEND Leddevice_SOURCES LedDeviceP9813.cpp)
+endif()
+
+if(ENABLE_LED_WS2801)
+	list(APPEND Leddevice_SOURCES LedDeviceWs2801.cpp)
+endif()
+
+if(ENABLE_LED_WS2812B_PWM)
+	list(APPEND Leddevice_SOURCES LedDeviceWS2812bPwm.cpp)
+endif()
 
 add_library(leddevice
-		${Leddevice_HEADERS}
-		${Leddevice_QT_HEADERS}
-		${Leddevice_HEADERS_MOC}
-		${Leddevice_SOURCES}
+	${Leddevice_SOURCES}
 )
 
 target_link_libraries(leddevice
 	hyperion-utils
-	serialport
-	${LIBUSB_1_LIBRARIES} #apt-get install libusb-1.0-0-dev
-	${CMAKE_THREAD_LIBS_INIT}
-	${QT_LIBRARIES}
+#	${LIBUSB_1_LIBRARIES} #apt-get install libusb-1.0-0-dev
+#	${CMAKE_THREAD_LIBS_INIT}
 )
 
-if(ENABLE_TINKERFORGE)
-	target_link_libraries(leddevice tinkerforge)
+if(ENABLE_LED_SERIAL)
+	target_link_libraries(leddevice serial)
+	if(UNIX)
+		target_link_libraries(leddevice pthread)
+	endif()
 endif()
 
-if(APPLE)
-	target_link_libraries(leddevice hidapi-mac)
-else()
-	target_link_libraries(leddevice hidapi-libusb)
+if(ENABLE_LED_TCPSOCKET)
+    target_link_libraries(leddevice PocoNet)
 endif()
+
+#if(APPLE)
+#	target_link_libraries(leddevice hidapi-mac)
+#else()
+#	target_link_libraries(leddevice hidapi-libusb)
+#endif()

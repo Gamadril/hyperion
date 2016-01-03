@@ -1,59 +1,50 @@
 #pragma once
 
-// Qt includes
-#include <QObject>
+#include "Poco/Dynamic/Struct.h"
+#include "Poco/Path.h"
 
-// Json includes
-#include <json/value.h>
+#include "hyperion/Hyperion.h"
+#include "EffectDefinition.h"
 
-// Hyperion includes
-#include <hyperion/Hyperion.h>
-
-// Effect engine includes
-#include <effectengine/EffectDefinition.h>
+#include "utils/HyperionControlEvents.h"
 
 // pre-declarioation
 class Effect;
-typedef struct _ts PyThreadState;
 
-class EffectEngine : public QObject
+class EffectEngine : public HyperionControlEvents
 {
-	Q_OBJECT
+public:
+    EffectEngine(Hyperion * hyperion, const Poco::DynamicStruct & jsonEffectConfig);
+    virtual ~EffectEngine();
+
+    const std::list<EffectDefinition> & getEffects() const;
+
+    static bool loadEffectDefinition(const Poco::Path & effectConfigFile, EffectDefinition & effectDefinition);
+
+    /// Run the specified effect on the given priority channel and optionally specify a timeout
+    int runEffect(const std::string &effectName, int priority, int timeout = -1);
+
+    /// Run the specified effect on the given priority channel and optionally specify a timeout
+    int runEffect(const std::string &effectName, const Poco::DynamicStruct & args, int priority, int timeout = -1);
+
+    /// Clear any effect running on the provided channel
+    void clearChannel(int priority);
+
+    /// Clear all effects
+    void clearAllChannels();
 
 public:
-	EffectEngine(Hyperion * hyperion, const Json::Value & jsonEffectConfig);
-	virtual ~EffectEngine();
-
-	const std::list<EffectDefinition> & getEffects() const;
-
-	static bool loadEffectDefinition(const std::string & path, const std::string & effectConfigFile, EffectDefinition &effectDefinition);
-
-public slots:
-	/// Run the specified effect on the given priority channel and optionally specify a timeout
-	int runEffect(const std::string &effectName, int priority, int timeout = -1);
-
-	/// Run the specified effect on the given priority channel and optionally specify a timeout
-	int runEffect(const std::string &effectName, const Json::Value & args, int priority, int timeout = -1);
-
-	/// Clear any effect running on the provided channel
-	void channelCleared(int priority);
-
-	/// Clear all effects
-	void allChannelsCleared();
-
-private slots:
-	void effectFinished(Effect * effect);
+    void onSetColors(const void *sender, ColorSetArgs &colorArgs);
+	void onEffectFinished(const void* sender);
 
 private:
-	/// Run the specified effect on the given priority channel and optionally specify a timeout
-	int runEffectScript(const std::string &script, const Json::Value & args, int priority, int timeout = -1);
+    /// Run the specified effect on the given priority channel and optionally specify a timeout
+    int runEffectScript(const std::string &script, const Poco::DynamicStruct & args, int priority, int timeout = -1);
 
 private:
-	Hyperion * _hyperion;
+    Hyperion * _hyperion;
 
-	std::list<EffectDefinition> _availableEffects;
+    std::list<EffectDefinition> _availableEffects;
 
-	std::list<Effect *> _activeEffects;
-
-    PyThreadState * _mainThreadState;
+    std::list<Effect *> _activeEffects;
 };

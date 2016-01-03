@@ -1,10 +1,10 @@
 {
 	"name" : "Rainbow mood",
-	"script" : "rainbow-mood.py",
+	"script" : "rainbow-mood.lua",
 	"args" :
 	{
-		"rotation-time" : 60.0,
-		"brightness" : 1.0,
+		"rotation-time" : 60000,
+		"brightness" : 255,
 		"reverse" : false
 	}
 }

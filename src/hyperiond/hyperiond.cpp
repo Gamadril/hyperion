@@ -1,397 +1,348 @@
-// C++ includes
 #include <cassert>
-#include <csignal>
 
-// QT includes
-#include <QCoreApplication>
-#include <QResource>
-#include <QLocale>
+#include "Poco/Dynamic/Struct.h"
+#include "Poco/FileStream.h"
+#include "Poco/JSON/Parser.h"
+#include "Poco/Util/ServerApplication.h"
+#include "Poco/Util/HelpFormatter.h"
+#include "Poco/Delegate.h"
 
-// config includes
-#include "HyperionConfig.h"
+#include "Poco/Thread.h"
 
 // Json-Schema includes
-#include <utils/jsonschema/JsonFactory.h>
+//#include <utils/jsonschema/JsonFactory.h>
 
-// Hyperion includes
-#include <hyperion/Hyperion.h>
+#include "HyperionConfig.h"
+#include "hyperion/Hyperion.h"
 
-#ifdef ENABLE_DISPMANX
-// Dispmanx grabber includes
-#include <grabber/DispmanxWrapper.h>
+#ifdef ENABLE_GRABBER
+#include "grabber/FrameGrabberFactory.h"
+#endif
+
+// KODI Video checker includes
+#ifdef ENABLE_KODI_CONNECTION
+#include "kodiconnector/KodiConnector.h"
+#endif
+
+#ifdef ENABLE_SERVER_JSON
+#include "jsonserver/JsonServer.h"
+#endif
+
+#ifdef ENABLE_SERVER_BOBLIGHT
+#include "boblightserver/BoblightServer.h"
+#endif
+
+#define setDefault(dynstruct, key, value) if(!dynstruct.contains(key)){dynstruct[key]=value;}
+
+Poco::DynamicStruct loadConfig(const std::string& configFile)
+{
+    Poco::FileInputStream fis(configFile);
+
+    Poco::JSON::Parser parser;
+    parser.setAllowComments(true);
+    parser.parse(fis);
+    Poco::DynamicStruct config = *(parser.result().extract<Poco::JSON::Object::Ptr>());
+
+    return config;
+}
+
+class HyperionService : public Poco::Util::ServerApplication
+{
+public:
+    HyperionService()
+        : _helpRequested(false)
+    {
+    }
+
+    ~HyperionService()
+    {
+    }
+
+protected:
+    void defineOptions(Poco::Util::OptionSet& options)
+    {
+        Poco::Util::ServerApplication::defineOptions(options);
+
+        options.addOption(Poco::Util::Option("help", "h", "display help information on command line arguments")
+                          .required(false)
+                          .repeatable(false));
+    }
+
+    void handleOption(const std::string& name, const std::string& value)
+    {
+        Poco::Util::ServerApplication::handleOption(name, value);
+
+        if(name == "help")
+            _helpRequested = true;
+    }
+
+    void displayHelp()
+    {
+        Poco::Util::HelpFormatter helpFormatter(options());
+        helpFormatter.setCommand(commandName());
+        helpFormatter.setUsage("config_file");
+        helpFormatter.setHeader("Ambilight clone");
+        helpFormatter.format(std::cout);
+    }
+
+    int main(const std::vector<std::string>& args)
+    {
+        if(_helpRequested)
+        {
+            displayHelp();
+        }
+        else
+        {
+            std::string confgiFile = "./config/hyperion.config.json";
+            if(args.size() < 1)
+            {
+                std::cout << "No configuration file provided, looking for default one" << std::endl;
+            } else {
+                confgiFile = args[0];
+            }
+
+            std::cout << "Using configuration file: " << confgiFile << std::endl;
+            Poco::DynamicStruct config = loadConfig(confgiFile);
+
+            _hyperion = new Hyperion(config);
+            std::cout << "Hyperion created and initialised" << std::endl;
+
+            // create boot sequence if the configuration is present
+#ifdef ENABLE_EFFECT_ENGINE			
+            if(config.contains("bootsequence"))
+            {
+                Poco::DynamicStruct effectConfig = config["bootsequence"].extract<Poco::DynamicStruct>();
+                // Get the parameters for the bootsequence
+                std::string effectName = effectConfig["effect"].toString();
+                unsigned duration_ms = effectConfig["duration_ms"].convert<unsigned>();
+                int priority = 0;
+
+                if(effectConfig.contains("args"))
+                {
+                    Poco::DynamicStruct effectConfigArgs = effectConfig["args"].extract<Poco::DynamicStruct>();
+                    if(_hyperion->setEffect(effectName, effectConfigArgs, priority, duration_ms) == 0)
+                    {
+                        std::cout << "Boot sequence(" << effectName
+                                  << ") with user-defined arguments created and started" << std::endl;
+                    }
+                    else
+                    {
+                        std::cout << "Failed to start boot sequence: " << effectName << " with user-defined arguments"
+                                  << std::endl;
+                    }
+                }
+                else
+                {
+                    if(_hyperion->setEffect(effectName, priority, duration_ms) == 0)
+                    {
+                        std::cout << "Boot sequence(" << effectName << ") created and started" << std::endl;
+                    }
+                    else
+                    {
+                        std::cout << "Failed to start boot sequence: " << effectName << std::endl;
+                    }
+                }
+            }
+#endif			
+			
+#ifdef ENABLE_GRABBER
+            // Construct and start the frame-grabber if the configuration is present
+            if(config.contains("framegrabber"))
+            {
+                Poco::DynamicStruct frameGrabberConfig = config["framegrabber"].extract<Poco::DynamicStruct>();
+				_frameGrabber = FrameGrabberFactory::createNewFrameGrabber(frameGrabberConfig, _hyperion->getLedCount());
+				
+				if (_frameGrabber != nullptr)
+				{
+                    _frameGrabber->clearEvent += Poco::delegate(this, &HyperionService::onClear);
+                    _frameGrabber->setColorsEvent += Poco::delegate(this, &HyperionService::onSetColors);
+
+                    _frameGrabber->start();
+
+                    std::cout << "Frame grabber created and started" << std::endl;
+                } else {
+                    std::cerr << "[ERROR] Frame grabber " << frameGrabberConfig["type"].toString() << " could not be created" << std::endl;
+                }
+            }
+#endif
+
+#ifdef ENABLE_KODI_CONNECTION
+            // create KODI connector if the configuration is present
+            if(config.contains("kodiConnector"))
+            {
+                _kodiConnectorConfig = config["kodiConnector"].extract<Poco::DynamicStruct>();
+                _kodiConnector = new KodiConnector(_kodiConnectorConfig["host"], _kodiConnectorConfig["port"]);
+
+                if(_kodiConnector != nullptr)
+                {
+                    _kodiConnector->videoModeEvent += Poco::delegate(this, &HyperionService::onSetVideoMode);
+                    _kodiConnector->grabbingModeEvent += Poco::delegate(this, &HyperionService::onSetGrabbingMode);
+                }
+
+                Poco::Thread kodiConnectorThread;
+                kodiConnectorThread.start(*_kodiConnector);
+
+                std::cout << "KODI connector created and started" << std::endl;
+            }
 #endif
 
 #ifdef ENABLE_V4L2
-// v4l2 grabber
-#include <grabber/V4L2Wrapper.h>
+            // construct and start the v4l2 grabber if the configuration is present
+            V4L2Wrapper* v4l2Grabber = nullptr;
+            if(config.contains("grabber-v4l2"))
+            {
+                Poco::DynamicStruct grabberConfig = config["grabber-v4l2"].extract<Poco::DynamicStruct>();
+
+                setDefault(grabberConfig, "device", "/dev/video0");
+                setDefault(grabberConfig, "input", 0);
+                setDefault(grabberConfig, "standard", "no-change");
+                setDefault(grabberConfig, "pixelFormat", "no-change");
+                setDefault(grabberConfig, "width", -1);
+                setDefault(grabberConfig, "height", -1);
+                setDefault(grabberConfig, "frameDecimation", 2);
+                setDefault(grabberConfig, "sizeDecimation", 8);
+                setDefault(grabberConfig, "redSignalThreshold", 0.0);
+                setDefault(grabberConfig, "greenSignalThreshold", 0.0);
+                setDefault(grabberConfig, "blueSignalThreshold", 0.0);
+                setDefault(grabberConfig, "priority", 800);
+                setDefault(grabberConfig, "mode", "2D");
+                setDefault(grabberConfig, "cropLeft", 0.0);
+                setDefault(grabberConfig, "cropRight", 0.0);
+                setDefault(grabberConfig, "cropTop", 0.0);
+                setDefault(grabberConfig, "cropBottom", 0.0);
+
+                v4l2Grabber =
+                    new V4L2Wrapper(grabberConfig["device"],
+                                    grabberConfig["input"],
+                                    parseVideoStandard(grabberConfig["standard"]),
+                                    parsePixelFormat(grabberConfig["pixelFormat"]),
+                                    grabberConfig["width"],
+                                    grabberConfig["height"],
+                                    grabberConfig["frameDecimation"],
+                                    grabberConfig["sizeDecimation"],
+                                    grabberConfig["redSignalThreshold"],
+                                    grabberConfig["greenSignalThreshold"],
+                                    grabberConfig["blueSignalThreshold"],
+                                    &hyperion,
+                                    grabberConfig["priority"]);
+                v4l2Grabber->set3D(parse3DMode(grabberConfig["mode"]));
+                v4l2Grabber->setCropping(grabberConfig["cropLeft"],
+                                         grabberConfig["cropRight"],
+                                         grabberConfig["cropTop"],
+                                         grabberConfig["cropBottom"]);
+
+                v4l2Grabber->start();
+                std::cout << "V4l2 grabber created and started" << std::endl;
+            }
 #endif
 
-#ifdef ENABLE_FB
-// Framebuffer grabber includes
-#include <grabber/FramebufferWrapper.h>
+
+#ifdef ENABLE_SERVER_JSON
+            // Create Json server if configuration is present
+            if(config.contains("jsonServer"))
+            {
+                _jsonServer = new JsonServer(_hyperion, config["jsonServer"]["port"]);
+                std::cout << "Json server created and started on port " << _jsonServer->getPort() << std::endl;
+            }
 #endif
 
-#ifdef ENABLE_AMLOGIC
-#include <grabber/AmlogicWrapper.h>
+#ifdef ENABLE_SERVER_BOBLIGHT
+
+            // Create Boblight server if configuration is present
+            BoblightServer* boblightServer = nullptr;
+            if(config.contains("boblightServer"))
+            {
+                boblightServer = new BoblightServer(&hyperion, config["boblightServer"]["port"]);
+                std::cout << "Boblight server created and started on port " << boblightServer->getPort() << std::endl;
+            }
+#endif			
+
+            // wait for CTRL-C or kill
+            waitForTerminationRequest();
+
+            // Delete all component
+#ifdef ENABLE_GRABBER
+            if (_frameGrabber != nullptr) {
+                _frameGrabber->clearEvent -= Poco::delegate(this, &HyperionService::onClear);
+                _frameGrabber->setColorsEvent -= Poco::delegate(this, &HyperionService::onSetColors);
+            }
+
+            delete _frameGrabber;
 #endif
 
-#ifdef ENABLE_OSX
-// OSX grabber includes
-#include <grabber/OsxWrapper.h>
+#ifdef ENABLE_KODI_CONNECTION
+            if (_kodiConnector != nullptr) {
+                _kodiConnector->videoModeEvent -= Poco::delegate(this, &HyperionService::onSetVideoMode);
+                _kodiConnector->grabbingModeEvent -= Poco::delegate(this, &HyperionService::onSetGrabbingMode);
+            }
+
+            delete _kodiConnector;
 #endif
 
-// XBMC Video checker includes
-#include <xbmcvideochecker/XBMCVideoChecker.h>
-
-// Effect engine includes
-#include <effectengine/EffectEngine.h>
-
-// JsonServer includes
-#include <jsonserver/JsonServer.h>
-
-#ifdef ENABLE_PROTOBUF
-// ProtoServer includes
-#include <protoserver/ProtoServer.h>
+#ifdef ENABLE_SERVER_JSON
+            delete _jsonServer;
 #endif
 
-// BoblightServer includes
-#include <boblightserver/BoblightServer.h>
-
-void signal_handler(const int signum)
-{
-	QCoreApplication::quit();
-
-	// reset signal handler to default (in case this handler is not capable of stopping)
-	signal(signum, SIG_DFL);
-}
-
-Json::Value loadConfig(const std::string & configFile)
-{
-	// make sure the resources are loaded (they may be left out after static linking)
-	Q_INIT_RESOURCE(resource);
-
-	// read the json schema from the resource
-	QResource schemaData(":/hyperion-schema");
-	assert(schemaData.isValid());
-
-	Json::Reader jsonReader;
-	Json::Value schemaJson;
-	if (!jsonReader.parse(reinterpret_cast<const char *>(schemaData.data()), reinterpret_cast<const char *>(schemaData.data()) + schemaData.size(), schemaJson, false))
-	{
-		throw std::runtime_error("Schema error: " + jsonReader.getFormattedErrorMessages())	;
-	}
-	JsonSchemaChecker schemaChecker;
-	schemaChecker.setSchema(schemaJson);
-
-	const Json::Value jsonConfig = JsonFactory::readJson(configFile);
-	schemaChecker.validate(jsonConfig);
-
-	return jsonConfig;
-}
-
-int main(int argc, char** argv)
-{
-	std::cout << "Application build time: " << __DATE__ << " " << __TIME__ << std::endl;
-
-	// Initialising QCoreApplication
-	QCoreApplication app(argc, argv);
-	std::cout << "QCoreApplication initialised" << std::endl;
-
-	signal(SIGINT,  signal_handler);
-	signal(SIGTERM, signal_handler);
-
-	// force the locale
-	setlocale(LC_ALL, "C");
-	QLocale::setDefault(QLocale::c());
-
-	if (argc < 2)
-	{
-		std::cout << "Missing required configuration file. Usage:" << std::endl;
-		std::cout << "hyperiond [config.file]" << std::endl;
-		return 1;
-	}
-
-	const std::string configFile = argv[1];
-	std::cout << "Selected configuration file: " << configFile.c_str() << std::endl;
-	const Json::Value config = loadConfig(configFile);
-
-	Hyperion hyperion(config);
-	std::cout << "Hyperion created and initialised" << std::endl;
-
-	// create boot sequence if the configuration is present
-	if (config.isMember("bootsequence"))
-	{
-		const Json::Value effectConfig = config["bootsequence"];
-
-		// Get the parameters for the bootsequence
-		const std::string effectName = effectConfig["effect"].asString();
-		const unsigned duration_ms   = effectConfig["duration_ms"].asUInt();
-		const int priority = 0;
-
-		hyperion.setColor(priority+1, ColorRgb::BLACK, duration_ms, false);
-
-		if (effectConfig.isMember("args"))
-		{
-			const Json::Value effectConfigArgs = effectConfig["args"];
-			if (hyperion.setEffect(effectName, effectConfigArgs, priority, duration_ms) == 0)
-			{
-					std::cout << "Boot sequence(" << effectName << ") with user-defined arguments created and started" << std::endl;
-			}
-			else
-			{
-					std::cout << "Failed to start boot sequence: " << effectName << " with user-defined arguments" << std::endl;
-			}
-		}
-		else
-		{
-			if (hyperion.setEffect(effectName, priority, duration_ms) == 0)
-			{
-				std::cout << "Boot sequence(" << effectName << ") created and started" << std::endl;
-			}
-			else
-			{
-				std::cout << "Failed to start boot sequence: " << effectName << std::endl;
-			}
-		}
-	}
-
-	// create XBMC video checker if the configuration is present
-	XBMCVideoChecker * xbmcVideoChecker = nullptr;
-	if (config.isMember("xbmcVideoChecker"))
-	{
-		const Json::Value & videoCheckerConfig = config["xbmcVideoChecker"];
-		xbmcVideoChecker = new XBMCVideoChecker(
-			videoCheckerConfig["xbmcAddress"].asString(),
-			videoCheckerConfig["xbmcTcpPort"].asUInt(),
-			videoCheckerConfig["grabVideo"].asBool(),
-			videoCheckerConfig["grabPictures"].asBool(),
-			videoCheckerConfig["grabAudio"].asBool(),
-			videoCheckerConfig["grabMenu"].asBool(),
-			videoCheckerConfig.get("grabScreensaver", true).asBool(),
-			videoCheckerConfig.get("enable3DDetection", true).asBool());
-
-		xbmcVideoChecker->start();
-		std::cout << "XBMC video checker created and started" << std::endl;
-	}
-
-#ifdef ENABLE_DISPMANX
-	// Construct and start the frame-grabber if the configuration is present
-	DispmanxWrapper * dispmanx = nullptr;
-	if (config.isMember("framegrabber"))
-	{
-		const Json::Value & frameGrabberConfig = config["framegrabber"];
-		dispmanx = new DispmanxWrapper(
-			frameGrabberConfig["width"].asUInt(),
-			frameGrabberConfig["height"].asUInt(),
-			frameGrabberConfig["frequency_Hz"].asUInt(),
-			&hyperion);
-
-		if (xbmcVideoChecker != nullptr)
-		{
-			QObject::connect(xbmcVideoChecker, SIGNAL(grabbingMode(GrabbingMode)), dispmanx, SLOT(setGrabbingMode(GrabbingMode)));
-			QObject::connect(xbmcVideoChecker, SIGNAL(videoMode(VideoMode)), dispmanx, SLOT(setVideoMode(VideoMode)));
-		}
-
-		dispmanx->start();
-		std::cout << "Frame grabber created and started" << std::endl;
-	}
-#else
-#if !defined(ENABLE_OSX) && !defined(ENABLE_FB)
-	if (config.isMember("framegrabber"))
-	{
-		std::cerr << "The dispmanx framegrabber can not be instantiated, becuse it has been left out from the build" << std::endl;
-	}
+#ifdef ENABLE_SERVER_BOBLIGHT
+            delete boblightServer;
 #endif
+        }
+        return ExitCode::EXIT_OK;
+    }
+
+protected:
+#ifdef ENABLE_KODI_CONNECTION
+    void onSetVideoMode (const void *sender, const VideoMode& mode) {
+        if (_frameGrabber != nullptr && _kodiConnectorConfig["enable3DDetection"].extract<bool>()) {
+            _frameGrabber->setVideoMode(mode);
+        }
+    }
+
+    void onSetGrabbingMode (const void *sender, const GrabbingMode& mode) {
+        if (_frameGrabber != nullptr) {
+            GrabbingMode modeToSet = GRABBINGMODE_OFF;
+
+            if (mode == GRABBINGMODE_AUDIO && _kodiConnectorConfig["grabAudio"].extract<bool>()) {
+                modeToSet = mode;
+            } else if (mode == GRABBINGMODE_VIDEO && _kodiConnectorConfig["grabVideo"].extract<bool>()) {
+                modeToSet = mode;
+            } else if (mode == GRABBINGMODE_PHOTO && _kodiConnectorConfig["grabPictures"].extract<bool>()) {
+                modeToSet = mode;
+            } else if (mode == GRABBINGMODE_MENU && _kodiConnectorConfig["grabMenu"].extract<bool>()) {
+                modeToSet = mode;
+            } else if (mode == GRABBINGMODE_SCREENSAVER && _kodiConnectorConfig["grabScreensaver"].extract<bool>()) {
+                modeToSet = mode;
+            }
+            _frameGrabber->setGrabbingMode(modeToSet);
+        }
+    }
 #endif
 
-#ifdef ENABLE_V4L2
-	// construct and start the v4l2 grabber if the configuration is present
-	V4L2Wrapper * v4l2Grabber = nullptr;
-	if (config.isMember("grabber-v4l2"))
-	{
-		const Json::Value & grabberConfig = config["grabber-v4l2"];
-		v4l2Grabber = new V4L2Wrapper(
-					grabberConfig.get("device", "/dev/video0").asString(),
-					grabberConfig.get("input", 0).asInt(),
-					parseVideoStandard(grabberConfig.get("standard", "no-change").asString()),
-					parsePixelFormat(grabberConfig.get("pixelFormat", "no-change").asString()),
-					grabberConfig.get("width", -1).asInt(),
-					grabberConfig.get("height", -1).asInt(),
-					grabberConfig.get("frameDecimation", 2).asInt(),
-					grabberConfig.get("sizeDecimation", 8).asInt(),
-					grabberConfig.get("redSignalThreshold", 0.0).asDouble(),
-					grabberConfig.get("greenSignalThreshold", 0.0).asDouble(),
-					grabberConfig.get("blueSignalThreshold", 0.0).asDouble(),
-					&hyperion,
-					grabberConfig.get("priority", 800).asInt());
-		v4l2Grabber->set3D(parse3DMode(grabberConfig.get("mode", "2D").asString()));
-		v4l2Grabber->setCropping(
-					grabberConfig.get("cropLeft", 0).asInt(),
-					grabberConfig.get("cropRight", 0).asInt(),
-					grabberConfig.get("cropTop", 0).asInt(),
-					grabberConfig.get("cropBottom", 0).asInt());
+    void onClear(const void *sender, const int &priority) {
+        _hyperion->clear(priority);
+    }
 
-		v4l2Grabber->start();
-		std::cout << "V4l2 grabber created and started" << std::endl;
-	}
-#else
-	if (config.isMember("grabber-v4l2"))
-	{
-		std::cerr << "The v4l2 grabber can not be instantiated, becuse it has been left out from the build" << std::endl;
-	}
+    void onSetColors(const void *sender, ColorSetArgs &colorArgs) {
+        _hyperion->setColors(colorArgs.priority, colorArgs.ledColors, colorArgs.timeout_ms, colorArgs.clearEffects);
+    }
+
+    void onClearAll(const void *sender) {
+        _hyperion->clearall();
+    }
+
+private:
+    bool _helpRequested;
+    Hyperion* _hyperion = nullptr;
+#ifdef ENABLE_KODI_CONNECTION
+    KodiConnector* _kodiConnector = nullptr;
+    Poco::DynamicStruct _kodiConnectorConfig;
 #endif
-
-#ifdef ENABLE_AMLOGIC
-	// Construct and start the framebuffer grabber if the configuration is present
-	AmlogicWrapper * amlGrabber = nullptr;
-	if (config.isMember("amlgrabber"))
-	{
-		const Json::Value & grabberConfig = config["amlgrabber"];
-		amlGrabber = new AmlogicWrapper(
-			grabberConfig["width"].asUInt(),
-			grabberConfig["height"].asUInt(),
-			grabberConfig["frequency_Hz"].asUInt(),
-			&hyperion);
-
-		if (xbmcVideoChecker != nullptr)
-		{
-			QObject::connect(xbmcVideoChecker, SIGNAL(grabbingMode(GrabbingMode)), amlGrabber, SLOT(setGrabbingMode(GrabbingMode)));
-			QObject::connect(xbmcVideoChecker, SIGNAL(videoMode(VideoMode)),       amlGrabber, SLOT(setVideoMode(VideoMode)));
-		}
-
-		amlGrabber->start();
-		std::cout << "AMLOGIC grabber created and started" << std::endl;
-	}
-#else
-	if (config.isMember("amlgrabber"))
-	{
-		std::cerr << "The AMLOGIC grabber can not be instantiated, because it has been left out from the build" << std::endl;
-	}
+#ifdef ENABLE_GRABBER
+    FrameGrabber* _frameGrabber = nullptr;
 #endif
-
-#ifdef ENABLE_FB
-	// Construct and start the framebuffer grabber if the configuration is present
-	FramebufferWrapper * fbGrabber = nullptr;
-	if (config.isMember("framebuffergrabber") || config.isMember("framegrabber"))
-	{
-		const Json::Value & grabberConfig = config.isMember("framebuffergrabber")? config["framebuffergrabber"] : config["framegrabber"];
-		fbGrabber = new FramebufferWrapper(
-			grabberConfig.get("device", "/dev/fb0").asString(),
-			grabberConfig["width"].asUInt(),
-			grabberConfig["height"].asUInt(),
-			grabberConfig["frequency_Hz"].asUInt(),
-			&hyperion);
-
-		if (xbmcVideoChecker != nullptr)
-		{
-			QObject::connect(xbmcVideoChecker, SIGNAL(grabbingMode(GrabbingMode)), fbGrabber, SLOT(setGrabbingMode(GrabbingMode)));
-			QObject::connect(xbmcVideoChecker, SIGNAL(videoMode(VideoMode)), fbGrabber, SLOT(setVideoMode(VideoMode)));
-		}
-
-		fbGrabber->start();
-		std::cout << "Framebuffer grabber created and started" << std::endl;
-	}
-#else
-	if (config.isMember("framebuffergrabber"))
-	{
-		std::cerr << "The framebuffer grabber can not be instantiated, becuse it has been left out from the build" << std::endl;
-	}
-#if !defined(ENABLE_DISPMANX) && !defined(ENABLE_OSX)
-	else if (config.isMember("framegrabber"))
-	{
-		std::cerr << "The framebuffer grabber can not be instantiated, becuse it has been left out from the build" << std::endl;
-	}
+#ifdef ENABLE_SERVER_JSON
+    JsonServer* _jsonServer = nullptr;
 #endif
-#endif
+};
 
-#ifdef ENABLE_OSX
-	// Construct and start the osx grabber if the configuration is present
-	OsxWrapper * osxGrabber = nullptr;
-	if (config.isMember("osxgrabber") || config.isMember("framegrabber"))
-	{
-		const Json::Value & grabberConfig = config.isMember("osxgrabber")? config["osxgrabber"] : config["framegrabber"];
-		osxGrabber = new OsxWrapper(
-										   grabberConfig.get("display", 0).asUInt(),
-										   grabberConfig["width"].asUInt(),
-										   grabberConfig["height"].asUInt(),
-										   grabberConfig["frequency_Hz"].asUInt(),
-										   &hyperion);
-
-		if (xbmcVideoChecker != nullptr)
-		{
-			QObject::connect(xbmcVideoChecker, SIGNAL(grabbingMode(GrabbingMode)), osxGrabber, SLOT(setGrabbingMode(GrabbingMode)));
-			QObject::connect(xbmcVideoChecker, SIGNAL(videoMode(VideoMode)), osxGrabber, SLOT(setVideoMode(VideoMode)));
-		}
-
-		osxGrabber->start();
-		std::cout << "OSX grabber created and started" << std::endl;
-	}
-#else
-	if (config.isMember("osxgrabber"))
-	{
-		std::cerr << "The osx grabber can not be instantiated, becuse it has been left out from the build" << std::endl;
-	}
-#if !defined(ENABLE_DISPMANX) && !defined(ENABLE_FB)
-	else if (config.isMember("framegrabber"))
-	{
-		std::cerr << "The osx grabber can not be instantiated, becuse it has been left out from the build" << std::endl;
-	}
-#endif
-#endif
-
-	// Create Json server if configuration is present
-	JsonServer * jsonServer = nullptr;
-	if (config.isMember("jsonServer"))
-	{
-		const Json::Value & jsonServerConfig = config["jsonServer"];
-		jsonServer = new JsonServer(&hyperion, jsonServerConfig["port"].asUInt());
-		std::cout << "Json server created and started on port " << jsonServer->getPort() << std::endl;
-	}
-
-#ifdef ENABLE_PROTOBUF
-	// Create Proto server if configuration is present
-	ProtoServer * protoServer = nullptr;
-	if (config.isMember("protoServer"))
-	{
-		const Json::Value & protoServerConfig = config["protoServer"];
-		protoServer = new ProtoServer(&hyperion, protoServerConfig["port"].asUInt());
-		std::cout << "Proto server created and started on port " << protoServer->getPort() << std::endl;
-	}
-#endif
-
-	// Create Boblight server if configuration is present
-	BoblightServer * boblightServer = nullptr;
-	if (config.isMember("boblightServer"))
-	{
-		const Json::Value & boblightServerConfig = config["boblightServer"];
-		boblightServer = new BoblightServer(&hyperion, boblightServerConfig["port"].asUInt());
-		std::cout << "Boblight server created and started on port " << boblightServer->getPort() << std::endl;
-	}
-
-	// run the application
-	int rc = app.exec();
-	std::cout << "Application closed with code " << rc << std::endl;
-
-	// Delete all component
-#ifdef ENABLE_DISPMANX
-	delete dispmanx;
-#endif
-#ifdef ENABLE_FB
-	delete fbGrabber;
-#endif
-#ifdef ENABLE_OSX
-	delete osxGrabber;
-#endif
-#ifdef ENABLE_V4L2
-	delete v4l2Grabber;
-#endif
-	delete xbmcVideoChecker;
-	delete jsonServer;
-#ifdef ENABLE_PROTOBUF
-	delete protoServer;
-#endif
-	delete boblightServer;
-
-	// leave application
-	return rc;
-}
+POCO_SERVER_MAIN(HyperionService)

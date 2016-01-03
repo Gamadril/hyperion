@@ -1,6 +1,6 @@
 {
 	"name" : "Strobe blue",
-	"script" : "strobe.py",
+	"script" : "strobe.lua",
 	"args" :
 	{
 		"color"     : [ 0, 0, 255 ],

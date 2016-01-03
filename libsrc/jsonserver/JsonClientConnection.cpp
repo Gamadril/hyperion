@@ -5,557 +5,420 @@
 // stl includes
 #include <iostream>
 #include <sstream>
-#include <iterator>
-
-// Qt includes
-#include <QResource>
-#include <QDateTime>
-#include <QCryptographicHash>
-#include <QHostInfo>
+#include <poco-lib/include/Poco/Net/NetException.h>
 
 // hyperion util includes
-#include <hyperion/ImageProcessorFactory.h>
-#include <hyperion/ImageProcessor.h>
-#include <hyperion/ColorTransform.h>
-#include <utils/ColorRgb.h>
+#include "HyperionConfig.h"
+#include "hyperion/ImageProcessorFactory.h"
+#include "hyperion/ImageProcessor.h"
+#include "hyperion/ColorTransform.h"
+#include "utils/JsonTools.h"
+
+#include "Poco/Base64Decoder.h"
+#include "Poco/JSON/JSONException.h"
+#include "Poco/JSON/Parser.h"
+
+#include "Poco/Net/DNS.h"
 
 // project includes
 #include "JsonClientConnection.h"
 
-JsonClientConnection::JsonClientConnection(QTcpSocket *socket, Hyperion * hyperion) :
-	QObject(),
-	_socket(socket),
-	_imageProcessor(ImageProcessorFactory::getInstance().newImageProcessor()),
-	_hyperion(hyperion),
-	_receiveBuffer(),
-	_webSocketHandshakeDone(false)
+JsonClientConnection::JsonClientConnection(Poco::Net::WebSocket * socket, Hyperion * hyperion) :
+    _socket(socket),
+    _imageProcessor(ImageProcessorFactory::getInstance().newImageProcessor()),
+    _hyperion(hyperion)
 {
-	// connect internal signals and slots
-	connect(_socket, SIGNAL(disconnected()), this, SLOT(socketClosed()));
-	connect(_socket, SIGNAL(readyRead()), this, SLOT(readData()));
 }
-
 
 JsonClientConnection::~JsonClientConnection()
 {
-	delete _socket;
+    _socket->close();
+    delete _imageProcessor;
 }
 
-void JsonClientConnection::readData()
+int JsonClientConnection::processRequest()
 {
-	_receiveBuffer += _socket->readAll();
+    int flags, size = 0;
+    
+    // TODO update to use alternate Buffer version in the next poco release
+    try {
+        size = _socket->receiveFrame(_receiveBuffer, sizeof(_receiveBuffer), flags);
+    } catch (Poco::Net::NetException ex) {
+        std::cerr << "[ERROR] Could not receive WebSocket frame: " << ex.displayText() << std::endl;
+        return -1;
+    } catch (Poco::TimeoutException ex) {
+        std::cerr << "[ERROR] WebSocket read timeout" << std::endl;
+        return -1;
+    }
+
+	if ((flags & Poco::Net::WebSocket::FRAME_OP_BITMASK) == Poco::Net::WebSocket::FRAME_OP_CLOSE)
+	{
+		return -1;
+	}
+    
+    if (size > 0)
+    {
+        if((flags & Poco::Net::WebSocket::FRAME_OP_BITMASK) == Poco::Net::WebSocket::FRAME_OP_PING)
+        {
+            _socket->sendFrame(_receiveBuffer, size, Poco::Net::WebSocket::FRAME_OP_PONG);
+        } else
+        {
+            handleMessage(std::string(_receiveBuffer, size));
+        }
+    }
 	
-	if (_webSocketHandshakeDone)
-	{
-		// websocket mode, data frame
-		handleWebSocketFrame();
-	} else
-	{
-		// might be a handshake request or raw socket data
-		if(_receiveBuffer.contains("Upgrade: websocket"))
-		{
-			doWebSocketHandshake();
-		} else 
-		{
-			// raw socket data, handling as usual
-			int bytes = _receiveBuffer.indexOf('\n') + 1;
-			while(bytes > 0)
-			{
-				// create message string
-				std::string message(_receiveBuffer.data(), bytes);
-
-				// remove message data from buffer
-				_receiveBuffer = _receiveBuffer.mid(bytes);
-
-				// handle message
-				handleMessage(message);
-
-				// try too look up '\n' again
-				bytes = _receiveBuffer.indexOf('\n') + 1;
-			}		
-		}
-	}
+	return 0;
 }
 
-void JsonClientConnection::handleWebSocketFrame()
+void JsonClientConnection::handleMessage(const std::string & messageString)
 {
-	if ((_receiveBuffer.at(0) & 0x80) == 0x80)
-	{
-		// final bit found, frame complete
-		quint8 * maskKey = NULL;
-		quint8 opCode = _receiveBuffer.at(0) & 0x0F;
-		bool isMasked = (_receiveBuffer.at(1) & 0x80) == 0x80;
-		quint64 payloadLength = _receiveBuffer.at(1) & 0x7F;
-		quint32 index = 2;
-		
-		switch (payloadLength)
-		{
-			case 126:
-				payloadLength = ((_receiveBuffer.at(2) << 8) & 0xFF00) | (_receiveBuffer.at(3) & 0xFF);
-				index += 2;
-				break;
-			case 127:
-				payloadLength = 0;
-				for (uint i=0; i < 8; i++)						{
-					payloadLength |= ((quint64)(_receiveBuffer.at(index+i) & 0xFF)) << (8*(7-i));
-				}
-				index += 8;
-				break;
-			default:
-				break;
-		}
-		
-		if (isMasked)
-		{
-			// if the data is masked we need to get the key for unmasking
-			maskKey = new quint8[4];
-			for (uint i=0; i < 4; i++)
-			{
-				maskKey[i] = _receiveBuffer.at(index + i);	
-			}
-			index += 4;
-		}
-		
-		// check the type of data frame
-		switch (opCode)
-		{
-		case 0x01:
-			{
-				// frame contains text, extract it
-				QByteArray result = _receiveBuffer.mid(index, payloadLength);
-				_receiveBuffer.clear();
-			
-				// unmask data if necessary
-				if (isMasked)
-				{
-					for (uint i=0; i < payloadLength; i++)
-					{
-						result[i] = (result[i] ^ maskKey[i % 4]);
-					}
-					if (maskKey != NULL)
-					{
-						delete[] maskKey;
-						maskKey = NULL;
-					}
-				}
-								
-				handleMessage(QString(result).toStdString());
-			}
-			break;
-		case 0x08:
-			{
-				// close request, confirm
-				quint8 close[] = {0x88, 0};				
-				_socket->write((const char*)close, 2);
-				_socket->flush();
-				_socket->close();
-			}
-			break;
-		case 0x09:
-			{
-				// ping received, send pong
-				quint8 pong[] = {0x0A, 0};				
-				_socket->write((const char*)pong, 2);
-				_socket->flush();
-			}
-			break;
-		}
-	} else
-	{
-		std::cout << "Someone is sending very big messages over several frames... it's not supported yet" << std::endl;
-		quint8 close[] = {0x88, 0};				
-		_socket->write((const char*)close, 2);
-		_socket->flush();
-		_socket->close();
-	}
-}
-
-void JsonClientConnection::doWebSocketHandshake()
-{
-	// http header, might not be a very reliable check...
-	std::cout << "Websocket handshake" << std::endl;
-
-	// get the key to prepare an answer
-	int start = _receiveBuffer.indexOf("Sec-WebSocket-Key") + 19;
-	std::string value(_receiveBuffer.mid(start, _receiveBuffer.indexOf("\r\n", start) - start).data());
-	_receiveBuffer.clear();
-
-	// must be always appended
-	value += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-
-	// generate sha1 hash
-	QByteArray hash = QCryptographicHash::hash(value.c_str(), QCryptographicHash::Sha1);
-
-	// prepare an answer
-	std::ostringstream h;
-	h << "HTTP/1.1 101 Switching Protocols\r\n" <<
-	"Upgrade: websocket\r\n" <<
-	"Connection: Upgrade\r\n" << 
-	"Sec-WebSocket-Accept: " << QString(hash.toBase64()).toStdString() << "\r\n\r\n";
-
-	_socket->write(h.str().c_str());
-	_socket->flush();
-	// we are in WebSocket mode, data frames should follow next
-	_webSocketHandshakeDone = true;
-}
-
-void JsonClientConnection::socketClosed()
-{
-	_webSocketHandshakeDone = false;
-	emit connectionClosed(this);
-}
-
-void JsonClientConnection::handleMessage(const std::string &messageString)
-{
-	Json::Reader reader;
-	Json::Value message;
-	if (!reader.parse(messageString, message, false))
-	{
-		sendErrorReply("Error while parsing json: " + reader.getFormattedErrorMessages());
-		return;
-	}
-
-	// check basic message
-	std::string errors;
-	if (!checkJson(message, ":schema", errors))
-	{
-		sendErrorReply("Error while validating json: " + errors);
-		return;
-	}
-
-	// check specific message
-	const std::string command = message["command"].asString();
-	if (!checkJson(message, QString(":schema-%1").arg(QString::fromStdString(command)), errors))
-	{
-		sendErrorReply("Error while validating json: " + errors);
-		return;
-	}
-
-	// switch over all possible commands and handle them
-	if (command == "color")
-		handleColorCommand(message);
-	else if (command == "image")
-		handleImageCommand(message);
-	else if (command == "effect")
-		handleEffectCommand(message);
-	else if (command == "serverinfo")
-		handleServerInfoCommand(message);
-	else if (command == "clear")
-		handleClearCommand(message);
-	else if (command == "clearall")
-		handleClearallCommand(message);
-	else if (command == "transform")
-		handleTransformCommand(message);
-	else
-		handleNotImplemented();
-}
-
-void JsonClientConnection::handleColorCommand(const Json::Value &message)
-{
-	// extract parameters
-	int priority = message["priority"].asInt();
-	int duration = message.get("duration", -1).asInt();
-
-	std::vector<ColorRgb> colorData(_hyperion->getLedCount());
-	const Json::Value & jsonColor = message["color"];
-	Json::UInt i = 0;
-	for (; i < jsonColor.size()/3 && i < _hyperion->getLedCount(); ++i)
-	{
-		colorData[i].red = uint8_t(message["color"][3u*i].asInt());
-		colorData[i].green = uint8_t(message["color"][3u*i+1u].asInt());
-		colorData[i].blue = uint8_t(message["color"][3u*i+2u].asInt());
-	}
-
-	// copy full blocks of led colors
-	unsigned size = i;
-	while (i + size < _hyperion->getLedCount())
-	{
-		memcpy(&(colorData[i]), colorData.data(), size * sizeof(ColorRgb));
-		i += size;
-	}
-
-	// copy remaining block of led colors
-	if (i < _hyperion->getLedCount())
-	{
-		memcpy(&(colorData[i]), colorData.data(), (_hyperion->getLedCount()-i) * sizeof(ColorRgb));
-	}
-
-	// set output
-	_hyperion->setColors(priority, colorData, duration);
-
-	// send reply
-	sendSuccessReply();
-}
-
-void JsonClientConnection::handleImageCommand(const Json::Value &message)
-{
-	// extract parameters
-	int priority = message["priority"].asInt();
-	int duration = message.get("duration", -1).asInt();
-	int width = message["imagewidth"].asInt();
-	int height = message["imageheight"].asInt();
-	QByteArray data = QByteArray::fromBase64(QByteArray(message["imagedata"].asCString()));
-
-	// check consistency of the size of the received data
-	if (data.size() != width*height*3)
-	{
-		sendErrorReply("Size of image data does not match with the width and height");
-		return;
-	}
-
-	// set width and height of the image processor
-	_imageProcessor->setSize(width, height);
-
-	// create ImageRgb
-	Image<ColorRgb> image(width, height);
-	memcpy(image.memptr(), data.data(), data.size());
-
-	// process the image
-	std::vector<ColorRgb> ledColors = _imageProcessor->process(image);
-	_hyperion->setColors(priority, ledColors, duration);
-
-	// send reply
-	sendSuccessReply();
-}
-
-void JsonClientConnection::handleEffectCommand(const Json::Value &message)
-{
-	// extract parameters
-	int priority = message["priority"].asInt();
-	int duration = message.get("duration", -1).asInt();
-	const Json::Value & effect = message["effect"];
-	const std::string & effectName = effect["name"].asString();
-
-	// set output
-	if (effect.isMember("args"))
-	{
-		_hyperion->setEffect(effectName, effect["args"], priority, duration);
-	}
-	else
-	{
-		_hyperion->setEffect(effectName, priority, duration);
-	}
-
-	// send reply
-	sendSuccessReply();
-}
-
-void JsonClientConnection::handleServerInfoCommand(const Json::Value &)
-{
-	// create result
-	Json::Value result;
-	result["success"] = true;
-	Json::Value & info = result["info"];
+    Poco::JSON::Parser parser;
+    Poco::Dynamic::Var parsedResult;
+    Poco::JSON::Object::Ptr message;
 	
-	// add host name for remote clients
-	info["hostname"] = QHostInfo::localHostName().toStdString();
+	//std::cout << messageString << std::endl;
 
-	// collect priority information
-	Json::Value & priorities = info["priorities"] = Json::Value(Json::arrayValue);
-	uint64_t now = QDateTime::currentMSecsSinceEpoch();
-	QList<int> activePriorities = _hyperion->getActivePriorities();
-	foreach (int priority, activePriorities) {
-		const Hyperion::InputInfo & priorityInfo = _hyperion->getPriorityInfo(priority);
-		Json::Value & item = priorities[priorities.size()];
-		item["priority"] = priority;
-		if (priorityInfo.timeoutTime_ms != -1)
-		{
-			item["duration_ms"] = Json::Value::UInt(priorityInfo.timeoutTime_ms - now);
-		}
-	}
+    try
+    {
+        parsedResult = parser.parse(messageString);
+    }
+    catch(Poco::JSON::JSONException& ex)
+    {
+        sendErrorReply("Error while parsing message: " + ex.message());
+        return;
+    }
 
-	// collect transform information
-	Json::Value & transformArray = info["transform"];
-	for (const std::string& transformId : _hyperion->getTransformIds())
-	{
-		const ColorTransform * colorTransform = _hyperion->getTransform(transformId);
-		if (colorTransform == nullptr)
-		{
-			std::cerr << "Incorrect color transform id: " << transformId << std::endl;
-			continue;
-		}
+    message = parsedResult.extract<Poco::JSON::Object::Ptr>();
 
-		Json::Value & transform = transformArray.append(Json::Value());
-		transform["id"] = transformId;
+    // check specific message
+    const std::string command = message->get("command").toString();
 
-		transform["saturationGain"] = colorTransform->_hsvTransform.getSaturationGain();
-		transform["valueGain"]      = colorTransform->_hsvTransform.getValueGain();
-
-		Json::Value & threshold = transform["threshold"];
-		threshold.append(colorTransform->_rgbRedTransform.getThreshold());
-		threshold.append(colorTransform->_rgbGreenTransform.getThreshold());
-		threshold.append(colorTransform->_rgbBlueTransform.getThreshold());
-		Json::Value & gamma = transform["gamma"];
-		gamma.append(colorTransform->_rgbRedTransform.getGamma());
-		gamma.append(colorTransform->_rgbGreenTransform.getGamma());
-		gamma.append(colorTransform->_rgbBlueTransform.getGamma());
-		Json::Value & blacklevel = transform["blacklevel"];
-		blacklevel.append(colorTransform->_rgbRedTransform.getBlacklevel());
-		blacklevel.append(colorTransform->_rgbGreenTransform.getBlacklevel());
-		blacklevel.append(colorTransform->_rgbBlueTransform.getBlacklevel());
-		Json::Value & whitelevel = transform["whitelevel"];
-		whitelevel.append(colorTransform->_rgbRedTransform.getWhitelevel());
-		whitelevel.append(colorTransform->_rgbGreenTransform.getWhitelevel());
-		whitelevel.append(colorTransform->_rgbBlueTransform.getWhitelevel());
-	}
-
-	// collect effect info
-	Json::Value & effects = info["effects"] = Json::Value(Json::arrayValue);
-	const std::list<EffectDefinition> & effectsDefinitions = _hyperion->getEffects();
-	for (const EffectDefinition & effectDefinition : effectsDefinitions)
-	{
-		Json::Value effect;
-		effect["name"] = effectDefinition.name;
-		effect["script"] = effectDefinition.script;
-		effect["args"] = effectDefinition.args;
-
-		effects.append(effect);
-	}
-
-	// send the result
-	sendMessage(result);
+    // switch over all possible commands and handle them
+    if (command == "color")
+        handleColorCommand(message);
+    else if (command == "image")
+        handleImageCommand(message);
+    else if (command == "effect")
+        handleEffectCommand(message);
+    else if (command == "serverinfo")
+        handleServerInfoCommand();
+    else if (command == "clear")
+        handleClearCommand(message);
+    else if (command == "clearall")
+        handleClearallCommand();
+    else if (command == "transform")
+        handleTransformCommand(message);
+    else
+        handleNotImplemented();
 }
 
-void JsonClientConnection::handleClearCommand(const Json::Value &message)
+void JsonClientConnection::handleColorCommand(const Poco::JSON::Object::Ptr & message)
 {
-	// extract parameters
-	int priority = message["priority"].asInt();
+    // extract parameters
+    int priority = message->get("priority");
+    int duration = message->optValue("duration", -1);
 
-	// clear priority
-	_hyperion->clear(priority);
+    std::vector<ColorRgb> colorData(_hyperion->getLedCount());
+    Poco::JSON::Array::Ptr colors = message->getArray("color");
+    unsigned i = 0;
+    for (; i < colors->size()/3 && i < _hyperion->getLedCount(); i++)
+    {
+        colorData[i].red = uint8_t(colors->get(3u*i).extract<int>());
+        colorData[i].green = uint8_t(colors->get(3u*i+1u).extract<int>());
+        colorData[i].blue = uint8_t(colors->get(3u*i+2u).extract<int>());
+    }
 
-	// send reply
-	sendSuccessReply();
+    // copy full blocks of led colors
+    unsigned size = i;
+    while (i + size < _hyperion->getLedCount())
+    {
+        memcpy(&(colorData[i]), colorData.data(), size * sizeof(ColorRgb));
+        i += size;
+    }
+
+    // copy remaining block of led colors
+    if (i < _hyperion->getLedCount())
+    {
+        memcpy(&(colorData[i]), colorData.data(), (_hyperion->getLedCount()-i) * sizeof(ColorRgb));
+    }
+
+    // set output
+    _hyperion->setColors(priority, colorData, duration, true);
+	//ColorSetArgs args = {priority, colorData, duration, true};
+    //setColorsEvent.notifyAsync(this, args);
+
+    // send reply
+    sendSuccessReply();
 }
 
-void JsonClientConnection::handleClearallCommand(const Json::Value &)
+void JsonClientConnection::handleImageCommand(const Poco::JSON::Object::Ptr & message)
 {
-	// clear priority
-	_hyperion->clearall();
+    // extract parameters
+    int priority = message->get("priority");
+    int duration = message->optValue("duration", -1);
+    const unsigned int width = message->get("imagewidth");
+    const unsigned int height = message->get("imageheight");
+    std::istringstream istr(message->get("imagedata").toString());
+    Poco::Base64Decoder decoder(istr);
+ 
+    // set width and height of the image processor
+    _imageProcessor->setSize(width, height);
 
-	// send reply
-	sendSuccessReply();
+    // create ImageRgb
+    Image<ColorRgb> image(width, height);
+    decoder.read((char*)image.memptr(), width*height*3);
+
+    // process the image
+    std::vector<ColorRgb> colorData = _imageProcessor->process(image);
+
+    // set output
+    _hyperion->setColors(priority, colorData, duration, true);
+
+    // send reply
+    sendSuccessReply();
 }
 
-void JsonClientConnection::handleTransformCommand(const Json::Value &message)
+void JsonClientConnection::handleEffectCommand(const Poco::JSON::Object::Ptr & message)
 {
-	const Json::Value & transform = message["transform"];
+#ifdef ENABLE_EFFECT_ENGINE
+    // extract parameters
+    int priority = message->get("priority");
+    int duration = message->optValue("duration", -1);
+    Poco::JSON::Object::Ptr effect = message->getObject("effect");
+    std::string effectName = effect->get("name").toString();
+	
+	// set output
+    if (effect->has("args"))
+    {
+		Poco::DynamicStruct args = *(effect->getObject("args"));
+        _hyperion->setEffect(effectName, args, priority, duration);
+    }
+    else
+    {
+        _hyperion->setEffect(effectName, priority, duration);
+    }
 
-	const std::string transformId = transform.get("id", _hyperion->getTransformIds().front()).asString();
-	ColorTransform * colorTransform = _hyperion->getTransform(transformId);
-	if (colorTransform == nullptr)
-	{
-		//sendErrorReply(std::string("Incorrect transform identifier: ") + transformId);
-		return;
-	}
+    // send reply
+    sendSuccessReply();
+#else
+	sendErrorReply("Hyperion was built without effect engine.");
+#endif
+}
 
-	if (transform.isMember("saturationGain"))
-	{
-		colorTransform->_hsvTransform.setSaturationGain(transform["saturationGain"].asDouble());
-	}
+void JsonClientConnection::handleServerInfoCommand()
+{
+    // create result
+    Poco::JSON::Object::Ptr result = new Poco::JSON::Object();
+    result->set("success", true);
 
-	if (transform.isMember("valueGain"))
-	{
-		colorTransform->_hsvTransform.setValueGain(transform["valueGain"].asDouble());
-	}
+    Poco::JSON::Object info;
+    // add host name for remote clients
+    info.set("hostname", Poco::Net::DNS::hostName());
 
-	if (transform.isMember("threshold"))
-	{
-		const Json::Value & values = transform["threshold"];
-		colorTransform->_rgbRedTransform  .setThreshold(values[0u].asDouble());
-		colorTransform->_rgbGreenTransform.setThreshold(values[1u].asDouble());
-		colorTransform->_rgbBlueTransform .setThreshold(values[2u].asDouble());
-	}
+    // collect priority information
+    Poco::JSON::Array priorities;
+    Poco::Timestamp now;
+    std::vector<int> activePriorities = _hyperion->getActivePriorities();
+    for (int priority : activePriorities)
+    {
+        const Hyperion::InputInfo & priorityInfo = _hyperion->getPriorityInfo(priority);
+        Poco::JSON::Object item;
+        item.set("priority", priority);
+        if (priorityInfo.timeoutTime_ms != -1)
+        {
+            item.set("duration_ms", uint(priorityInfo.timeoutTime_ms - (now.epochMicroseconds() / 1000)));
+        }
+        priorities.add(item);
+    }
+    info.set("priorities", priorities);
 
-	if (transform.isMember("gamma"))
-	{
-		const Json::Value & values = transform["gamma"];
-		colorTransform->_rgbRedTransform  .setGamma(values[0u].asDouble());
-		colorTransform->_rgbGreenTransform.setGamma(values[1u].asDouble());
-		colorTransform->_rgbBlueTransform .setGamma(values[2u].asDouble());
-	}
+    // collect transform information
+    Poco::JSON::Array transformArray;
+    for (const std::string& transformId : _hyperion->getTransformIds())
+    {
+        const ColorTransform * colorTransform = _hyperion->getTransform(transformId);
+        if (colorTransform == nullptr)
+        {
+            std::cerr << "Incorrect color transform id: " << transformId << std::endl;
+            continue;
+        }
 
-	if (transform.isMember("blacklevel"))
-	{
-		const Json::Value & values = transform["blacklevel"];
-		colorTransform->_rgbRedTransform  .setBlacklevel(values[0u].asDouble());
-		colorTransform->_rgbGreenTransform.setBlacklevel(values[1u].asDouble());
-		colorTransform->_rgbBlueTransform .setBlacklevel(values[2u].asDouble());
-	}
+        Poco::JSON::Object transform;
+        transform.set("id", transformId);
+        transform.set("saturationGain", colorTransform->_hsvTransform.getSaturationGain());
+        transform.set("valueGain", colorTransform->_hsvTransform.getValueGain());
 
-	if (transform.isMember("whitelevel"))
-	{
-		const Json::Value & values = transform["whitelevel"];
-		colorTransform->_rgbRedTransform  .setWhitelevel(values[0u].asDouble());
-		colorTransform->_rgbGreenTransform.setWhitelevel(values[1u].asDouble());
-		colorTransform->_rgbBlueTransform .setWhitelevel(values[2u].asDouble());
-	}
+        Poco::JSON::Array threshold;
+        threshold.add(colorTransform->_rgbRedTransform.getThreshold());
+        threshold.add(colorTransform->_rgbGreenTransform.getThreshold());
+        threshold.add(colorTransform->_rgbBlueTransform.getThreshold());
+        transform.set("threshold", threshold);
 
-	// commit the changes
-	_hyperion->transformsUpdated();
+        Poco::JSON::Array gamma;
+        gamma.add(colorTransform->_rgbRedTransform.getGamma());
+        gamma.add(colorTransform->_rgbGreenTransform.getGamma());
+        gamma.add(colorTransform->_rgbBlueTransform.getGamma());
+        transform.set("gamma", gamma);
 
-	sendSuccessReply();
+        Poco::JSON::Array blacklevel;
+        blacklevel.add(colorTransform->_rgbRedTransform.getBlacklevel());
+        blacklevel.add(colorTransform->_rgbGreenTransform.getBlacklevel());
+        blacklevel.add(colorTransform->_rgbBlueTransform.getBlacklevel());
+        transform.set("blacklevel", blacklevel);
+
+        Poco::JSON::Array whitelevel;
+        whitelevel.add(colorTransform->_rgbRedTransform.getWhitelevel());
+        whitelevel.add(colorTransform->_rgbGreenTransform.getWhitelevel());
+        whitelevel.add(colorTransform->_rgbBlueTransform.getWhitelevel());
+        transform.set("whitelevel", whitelevel);
+		
+        transformArray.add(transform);
+    }
+    info.set("transform", transformArray);
+
+#ifdef ENABLE_EFFECT_ENGINE	
+    // collect effect info
+    Poco::JSON::Array effects;
+    const std::list<EffectDefinition> & effectsDefinitions = _hyperion->getEffects();
+    for (const EffectDefinition & effectDefinition : effectsDefinitions)
+    {
+        Poco::JSON::Object effect;
+        effect.set("name", effectDefinition.name);
+        effect.set("script", effectDefinition.script);
+		Poco::JSON::Object largs = jsontools::structToJsonObject(effectDefinition.args);
+        effect.set("args", largs);
+        effects.add(effect);
+    }
+	info.set("effects", effects);
+#endif
+	
+    result->set("info", info);
+
+    // send the result
+    sendMessage(result);
+}
+
+void JsonClientConnection::handleClearCommand(const Poco::JSON::Object::Ptr & message)
+{
+    // extract parameters
+    int priority = message->get("priority");
+
+    // clear priority
+    _hyperion->clear(priority);
+
+    // send reply
+    sendSuccessReply();
+}
+
+void JsonClientConnection::handleClearallCommand()
+{
+    // clear priority
+    _hyperion->clearall();
+
+    // send reply
+    sendSuccessReply();
+}
+
+void JsonClientConnection::handleTransformCommand(const Poco::JSON::Object::Ptr & message)
+{
+    Poco::JSON::Object::Ptr transform = message->getObject("transform");
+
+    const std::string transformId = transform->optValue("id", _hyperion->getTransformIds().front());
+    ColorTransform * colorTransform = _hyperion->getTransform(transformId);
+    if (colorTransform == nullptr)
+    {
+        //sendErrorReply(std::string("Incorrect transform identifier: ") + transformId);
+        return;
+    }
+
+    if (transform->has("saturationGain"))
+    {
+        colorTransform->_hsvTransform.setSaturationGain(transform->get("saturationGain").extract<double>());
+    }
+
+    if (transform->has("valueGain"))
+    {
+        colorTransform->_hsvTransform.setValueGain(transform->get("valueGain").extract<double>());
+    }
+
+    Poco::JSON::Array::Ptr values;
+    if (transform->has("threshold"))
+    {
+        values = transform->getArray("threshold");
+        colorTransform->_rgbRedTransform  .setThreshold(values->get(0));
+        colorTransform->_rgbGreenTransform.setThreshold(values->get(1));
+        colorTransform->_rgbBlueTransform .setThreshold(values->get(2));
+    }
+
+    if (transform->has("gamma"))
+    {
+        values = transform->getArray("gamma");
+        colorTransform->_rgbRedTransform  .setGamma(values->get(0));
+        colorTransform->_rgbGreenTransform.setGamma(values->get(1));
+        colorTransform->_rgbBlueTransform .setGamma(values->get(2));
+    }
+
+    if (transform->has("blacklevel"))
+    {
+        values = transform->getArray("blacklevel");
+        colorTransform->_rgbRedTransform  .setBlacklevel(values->get(0));
+        colorTransform->_rgbGreenTransform.setBlacklevel(values->get(1));
+        colorTransform->_rgbBlueTransform .setBlacklevel(values->get(2));
+    }
+
+    if (transform->has("whitelevel"))
+    {
+        values = transform->getArray("whitelevel");
+        colorTransform->_rgbRedTransform  .setWhitelevel(values->get(0));
+        colorTransform->_rgbGreenTransform.setWhitelevel(values->get(1));
+        colorTransform->_rgbBlueTransform .setWhitelevel(values->get(2));
+    }
+
+    // commit the changes
+    _hyperion->transformsUpdated();
+
+    sendSuccessReply();
 }
 
 void JsonClientConnection::handleNotImplemented()
 {
-	sendErrorReply("Command not implemented");
+    sendErrorReply("Command not implemented");
 }
 
-void JsonClientConnection::sendMessage(const Json::Value &message)
+void JsonClientConnection::sendMessage(const Poco::JSON::Object::Ptr & message)
 {
-	Json::FastWriter writer;
-	std::string serializedReply = writer.write(message);
+    // serialize message
+    std::ostringstream stream;
+    message->stringify(stream);
+    std::string serializedReply = stream.str();
 	
-	if (!_webSocketHandshakeDone)
-	{
-		// raw tcp socket mode
-		_socket->write(serializedReply.data(), serializedReply.length());
-	} else
-	{
-		// websocket mode
-		quint32 size = serializedReply.length();
-	
-		// prepare data frame
-		QByteArray response;
-		response.append(0x81);
-		if (size > 125)
-		{
-			response.append(0x7E);
-			response.append((size >> 8) & 0xFF);
-			response.append(size & 0xFF);
-		} else {
-			response.append(size);
-		}
-	
-		response.append(serializedReply.c_str(), serializedReply.length());
-	
-		_socket->write(response.data(), response.length());		
-	}
+	//std::cout << "REPLY: " << serializedReply << std::endl;
+
+    _socket->sendFrame(serializedReply.c_str(), (int) serializedReply.size());
 }
 
 void JsonClientConnection::sendSuccessReply()
 {
-	// create reply
-	Json::Value reply;
-	reply["success"] = true;
+    // create reply
+    Poco::JSON::Object::Ptr reply = new Poco::JSON::Object();
+    reply->set("success", true);
 
-	// send reply
-	sendMessage(reply);
+    // send reply
+    sendMessage(reply);
 }
 
-void JsonClientConnection::sendErrorReply(const std::string &error)
+void JsonClientConnection::sendErrorReply(const std::string & error)
 {
-	// create reply
-	Json::Value reply;
-	reply["success"] = false;
-	reply["error"] = error;
+    // create reply
+    Poco::JSON::Object::Ptr reply = new Poco::JSON::Object();
+    reply->set("success", false);
+    reply->set("error", error);
 
-	// send reply
-	sendMessage(reply);
+    // send reply
+    sendMessage(reply);
 }
-
-bool JsonClientConnection::checkJson(const Json::Value & message, const QString & schemaResource, std::string & errorMessage)
+/*
+bool JsonClientConnection::checkJson(const Poco::JSON::Object::Ptr & message, const QString & schemaResource, std::string & errorMessage)
 {
 	// read the json schema from the resource
 	QResource schemaData(schemaResource);
@@ -587,3 +450,4 @@ bool JsonClientConnection::checkJson(const Json::Value & message, const QString 
 
 	return true;
 }
+*/

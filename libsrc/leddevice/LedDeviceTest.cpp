@@ -1,31 +1,33 @@
+#include <fstream>
 
 // Local-Hyperion includes
 #include "LedDeviceTest.h"
 
 LedDeviceTest::LedDeviceTest(const std::string& output) :
-	_ofs(output.empty()?"/home/pi/LedDevice.out":output.c_str())
+    _fileName(output.c_str())
 {
-	// empty
+    // empty
 }
 
 LedDeviceTest::~LedDeviceTest()
 {
-	// empty
+    // empty
 }
 
 int LedDeviceTest::write(const std::vector<ColorRgb> & ledValues)
 {
-	_ofs << "[";
-	for (const ColorRgb& color : ledValues)
-	{
-		_ofs << color;
-	}
-	_ofs << "]" << std::endl;
+	std::ofstream file(_fileName);
+    for (const ColorRgb& color : ledValues)
+    {
+        file << color;
+    }
+    file << std::endl;
+	file.close();
 
-	return 0;
+    return 0;
 }
 
 int LedDeviceTest::switchOff()
 {
-	return 0;
+    return 0;
 }

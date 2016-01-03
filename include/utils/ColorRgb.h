@@ -12,25 +12,30 @@ struct ColorRgb;
 ///
 struct ColorRgb
 {
-	/// The red color channel
-	uint8_t red;
-	/// The green color channel
-	uint8_t green;
-	/// The blue color channel
-	uint8_t blue;
+    /// The red color channel
+    uint8_t red;
+    /// The green color channel
+    uint8_t green;
+    /// The blue color channel
+    uint8_t blue;
 
-	/// 'Black' RgbColor (0, 0, 0)
-	static ColorRgb BLACK;
-	/// 'Red' RgbColor (255, 0, 0)
-	static ColorRgb RED;
-	/// 'Green' RgbColor (0, 255, 0)
-	static ColorRgb GREEN;
-	/// 'Blue' RgbColor (0, 0, 255)
-	static ColorRgb BLUE;
-	/// 'Yellow' RgbColor (255, 255, 0)
-	static ColorRgb YELLOW;
-	/// 'White' RgbColor (255, 255, 255)
-	static ColorRgb WHITE;
+    /// 'Black' RgbColor (0, 0, 0)
+    static ColorRgb BLACK;
+    /// 'Red' RgbColor (255, 0, 0)
+    static ColorRgb RED;
+    /// 'Green' RgbColor (0, 255, 0)
+    static ColorRgb GREEN;
+    /// 'Blue' RgbColor (0, 0, 255)
+    static ColorRgb BLUE;
+    /// 'Yellow' RgbColor (255, 255, 0)
+    static ColorRgb YELLOW;
+    /// 'White' RgbColor (255, 255, 255)
+    static ColorRgb WHITE;
+/*
+    friend std::ostream &operator<<(std::ostream &stream, ColorRgb const &color) {
+        return stream << "(" << color.red << "," << color.green << "," << color.blue << ")";
+    }
+   */
 };
 
 /// Assert to ensure that the size of the structure is 'only' 3 bytes
@@ -45,19 +50,19 @@ static_assert(sizeof(ColorRgb) == 3, "Incorrect size of ColorRgb");
 ///
 inline std::ostream& operator<<(std::ostream& os, const ColorRgb& color)
 {
-	os << "{" << unsigned(color.red) << "," << unsigned(color.green) << "," << unsigned(color.blue) << "}";
-	return os;
+    os << "{" << unsigned(color.red) << "," << unsigned(color.green) << "," << unsigned(color.blue) << "}";
+    return os;
 }
 
 
 /// Compare operator to check if a color is 'smaller' than another color
 inline bool operator<(const ColorRgb & lhs, const ColorRgb & rhs)
 {
-	return (lhs.red < rhs.red) && (lhs.green < rhs.green) && (lhs.blue < rhs.blue);
+    return (lhs.red < rhs.red) && (lhs.green < rhs.green) && (lhs.blue < rhs.blue);
 }
 
 /// Compare operator to check if a color is 'smaller' than or 'equal' to another color
 inline bool operator<=(const ColorRgb & lhs, const ColorRgb & rhs)
 {
-	return (lhs.red <= rhs.red) && (lhs.green <= rhs.green) && (lhs.blue <= rhs.blue);
+    return (lhs.red <= rhs.red) && (lhs.green <= rhs.green) && (lhs.blue <= rhs.blue);
 }

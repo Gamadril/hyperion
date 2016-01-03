@@ -15,65 +15,65 @@
 class RgbChannelTransform
 {
 public:
-	/// Default constructor
-	RgbChannelTransform();
+    /// Default constructor
+    RgbChannelTransform();
 
-	/// Constructor
-	/// @param threshold  The minimum threshold
-	/// @param gamma The gamma of the gamma-curve correction
-	/// @param blacklevel The minimum value for the RGB-Channel
-	/// @param whitelevel The maximum value for the RGB-Channel
-	RgbChannelTransform(double threshold, double gamma, double blacklevel, double whitelevel);
+    /// Constructor
+    /// @param threshold  The minimum threshold
+    /// @param gamma The gamma of the gamma-curve correction
+    /// @param blacklevel The minimum value for the RGB-Channel
+    /// @param whitelevel The maximum value for the RGB-Channel
+    RgbChannelTransform(double threshold, double gamma, double blacklevel, double whitelevel);
 
-	/// Destructor
-	~RgbChannelTransform();
+    /// Destructor
+    ~RgbChannelTransform();
 
-	/// @return The current threshold value
-	double getThreshold() const;
+    /// @return The current threshold value
+    double getThreshold() const;
 
-	/// @param threshold New threshold value
-	void setThreshold(double threshold);
+    /// @param threshold New threshold value
+    void setThreshold(double threshold);
 
-	/// @return The current gamma value
-	double getGamma() const;
+    /// @return The current gamma value
+    double getGamma() const;
 
-	/// @param gamma New gamma value
-	void setGamma(double gamma);
+    /// @param gamma New gamma value
+    void setGamma(double gamma);
 
-	/// @return The current blacklevel value
-	double getBlacklevel() const;
+    /// @return The current blacklevel value
+    double getBlacklevel() const;
 
-	/// @param blacklevel New blacklevel value
-	void setBlacklevel(double blacklevel);
+    /// @param blacklevel New blacklevel value
+    void setBlacklevel(double blacklevel);
 
-	/// @return The current whitelevel value
-	double getWhitelevel() const;
+    /// @return The current whitelevel value
+    double getWhitelevel() const;
 
-	/// @param whitelevel New whitelevel value
-	void setWhitelevel(double whitelevel);
+    /// @param whitelevel New whitelevel value
+    void setWhitelevel(double whitelevel);
 
-	/// Transform the given byte value
-	/// @param input The input color byte
-	/// @return The transformed byte value
-	uint8_t transform(uint8_t input) const
-	{
-		return _mapping[input];
-	}
-
-private:
-	/// (re)-initilize the color mapping
-	void initializeMapping();
+    /// Transform the given byte value
+    /// @param input The input color byte
+    /// @return The transformed byte value
+    uint8_t transform(uint8_t input) const
+    {
+        return _mapping[input];
+    }
 
 private:
-	/// The threshold value
-	double _threshold;
-	/// The gamma value
-	double _gamma;
-	/// The blacklevel
-	double _blacklevel;
-	/// The whitelevel
-	double _whitelevel;
+    /// (re)-initilize the color mapping
+    void initializeMapping();
 
-	/// The mapping from input color to output color
-	uint8_t _mapping[256];
+private:
+    /// The threshold value
+    double _threshold;
+    /// The gamma value
+    double _gamma;
+    /// The blacklevel
+    double _blacklevel;
+    /// The whitelevel
+    double _whitelevel;
+
+    /// The mapping from input color to output color
+    uint8_t _mapping[256];
 };

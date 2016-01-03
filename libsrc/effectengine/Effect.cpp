@@ -1,378 +1,358 @@
-// Python include
-#include <Python.h>
-
 // stl includes
 #include <iostream>
 #include <sstream>
+#include <thread>
 
-// Qt includes
-#include <QDateTime>
+#include "Poco/Timestamp.h"
 
 // effect engin eincludes
 #include "Effect.h"
+#include "utils/HsvTransform.h"
 
-// Python method table
-PyMethodDef Effect::effectMethods[] = {
-	{"setColor",    Effect::wrapSetColor,    METH_VARARGS, "Set a new color for the leds."},
-	{"setImage",    Effect::wrapSetImage,    METH_VARARGS, "Set a new image to process and determine new led colors."},
-	{"abort",       Effect::wrapAbort,       METH_NOARGS,  "Check if the effect should abort execution."},
-	{NULL, NULL, 0, NULL}
-};
+namespace {
 
-#if PY_MAJOR_VERSION >= 3
-// create the hyperion module
-struct PyModuleDef Effect::moduleDef = {
-	PyModuleDef_HEAD_INIT,
-	"hyperion",            /* m_name */
-	"Hyperion module",     /* m_doc */
-	-1,                    /* m_size */
-	Effect::effectMethods, /* m_methods */
-	NULL,                  /* m_reload */
-	NULL,                  /* m_traverse */
-	NULL,                  /* m_clear */
-	NULL,                  /* m_free */
-};
+    static int lua_setColor(lua_State *state) {
+        Effect **effect = static_cast<Effect **>(luaL_checkudata(state, 1, "EffectMT"));
+        (*effect)->setColor(state);
+        return 0;
+    }
 
-PyObject* Effect::PyInit_hyperion()
+    static int lua_setImage(lua_State *state) {
+        Effect **effect = static_cast<Effect **>(luaL_checkudata(state, 1, "EffectMT"));
+        (*effect)->setImage(state);
+        return 0;
+    }
+
+    static int lua_abort(lua_State *state) {
+        Effect **effect = static_cast<Effect **>(luaL_checkudata(state, 1, "EffectMT"));
+        bool toAbort = (*effect)->shouldFinish();
+        lua_pushboolean(state, toAbort);
+        return 1;
+    }
+
+    static int lua_sleep(lua_State *state) {
+        int ms = static_cast<int> (luaL_checknumber(state, 2));
+        std::this_thread::sleep_for(std::chrono::milliseconds{ms});
+        return 0;
+    }
+
+    static int lua_rgb_to_hsv(lua_State *state) {
+        uint16_t h;
+        uint8_t s, v,
+                r = static_cast<uint8_t> (luaL_checknumber(state, 1)),
+                g = static_cast<uint8_t> (luaL_checknumber(state, 2)),
+                b = static_cast<uint8_t> (luaL_checknumber(state, 3));
+
+        HsvTransform::rgb2hsv(r, g, b, h, s, v);
+
+        lua_newtable(state);
+
+        lua_pushinteger(state, 1);
+        lua_pushinteger(state, h);
+        lua_settable(state, -3);
+
+        lua_pushinteger(state, 2);
+        lua_pushinteger(state, s);
+        lua_settable(state, -3);
+
+        lua_pushinteger(state, 3);
+        lua_pushinteger(state, v);
+        lua_settable(state, -3);
+
+        return 1;
+    }
+
+
+    /**
+     * Convert HSV value to RGB
+     * H [0..359]
+     * S [0..255]
+     * V [0..255]
+     */
+    static int lua_hsv_to_rgb(lua_State *state) {
+        uint16_t h = static_cast<uint16_t> (luaL_checknumber(state, 1));
+        uint8_t r, g, b,
+                s = static_cast<uint8_t> (luaL_checknumber(state, 2)),
+                v = static_cast<uint8_t> (luaL_checknumber(state, 3));
+
+        HsvTransform::hsv2rgb(h, s, v, r, g, b);
+
+        lua_newtable(state);
+
+        lua_pushinteger(state, 1);
+        lua_pushinteger(state, r);
+        lua_settable(state, -3);
+
+        lua_pushinteger(state, 2);
+        lua_pushinteger(state, g);
+        lua_settable(state, -3);
+
+        lua_pushinteger(state, 3);
+        lua_pushinteger(state, b);
+        lua_settable(state, -3);
+
+        return 1;
+    }
+
+
+
+/*
+void stackdump_g(lua_State* l)
 {
-	return PyModule_Create(&moduleDef);
+    int i;
+    int top = lua_gettop(l);
+
+    printf("total in stack %d\n",top);
+
+    for (i = 1; i <= top; i++)
+    {
+        int t = lua_type(l, i);
+        switch (t) {
+            case LUA_TSTRING:  
+                printf("string: '%s'\n", lua_tostring(l, i));
+                break;
+            case LUA_TBOOLEAN:  
+                printf("boolean %s\n",lua_toboolean(l, i) ? "true" : "false");
+                break;
+            case LUA_TNUMBER:  
+                printf("number: %g\n", lua_tonumber(l, i));
+                break;
+            default:  
+                printf("%s\n", lua_typename(l, t));
+                break;
+        }
+        printf("  "); 
+    }
+    printf("\n"); 
 }
-#else
-void Effect::PyInit_hyperion()
-{
-	Py_InitModule("hyperion", effectMethods);
-}
-#endif
-
-void Effect::registerHyperionExtensionModule()
-{
-	PyImport_AppendInittab("hyperion", &PyInit_hyperion);
-}
-
-Effect::Effect(PyThreadState * mainThreadState, int priority, int timeout, const std::string & script, const Json::Value & args) :
-	QThread(),
-	_mainThreadState(mainThreadState),
-	_priority(priority),
-	_timeout(timeout),
-	_script(script),
-	_args(args),
-	_endTime(-1),
-	_interpreterThreadState(nullptr),
-	_abortRequested(false),
-	_imageProcessor(ImageProcessorFactory::getInstance().newImageProcessor()),
-	_colors()
-{
-	_colors.resize(_imageProcessor->getLedCount(), ColorRgb::BLACK);
-
-	// disable the black border detector for effects
-	_imageProcessor->enableBalckBorderDetector(false);
-
-	// connect the finished signal
-	connect(this, SIGNAL(finished()), this, SLOT(effectFinished()));
-}
-
-Effect::~Effect()
-{
-}
-
-void Effect::run()
-{
-	// switch to the main thread state and acquire the GIL
-	PyEval_RestoreThread(_mainThreadState);
-
-	// Initialize a new thread state
-	_interpreterThreadState = Py_NewInterpreter();
-
-	// import the buildtin Hyperion module
-	PyObject * module = PyImport_ImportModule("hyperion");
-
-	// add a capsule containing 'this' to the module to be able to retrieve the effect from the callback function
-	PyObject_SetAttrString(module, "__effectObj", PyCapsule_New(this, nullptr, nullptr));
-
-	// add ledCount variable to the interpreter
-	PyObject_SetAttrString(module, "ledCount", Py_BuildValue("i", _imageProcessor->getLedCount()));
-
-	// add a args variable to the interpreter
-	PyObject_SetAttrString(module, "args", json2python(_args));
-
-	// decref the module
-	Py_XDECREF(module);
-
-	// Set the end time if applicable
-	if (_timeout > 0)
-	{
-		_endTime = QDateTime::currentMSecsSinceEpoch() + _timeout;
-	}
-
-	// Run the effect script
-	FILE* file = fopen(_script.c_str(), "r");
-	if (file != nullptr)
-	{
-		PyRun_SimpleFile(file, _script.c_str());
-	}
-	else
-	{
-		std::cerr << "Unable to open script file " << _script << std::endl;
-	}
-
-	// Clean up the thread state
-	Py_EndInterpreter(_interpreterThreadState);
-	_interpreterThreadState = nullptr;
-	PyEval_ReleaseLock();
-}
-
-int Effect::getPriority() const
-{
-	return _priority;
-}
-
-bool Effect::isAbortRequested() const
-{
-	return _abortRequested;
-}
-
-void Effect::abort()
-{
-	_abortRequested = true;
+*/
 }
 
-void Effect::effectFinished()
-{
-	emit effectFinished(this);
+Effect::Effect(int priority, int timeout, const std::string &script, const Poco::Dynamic::Var &args) :
+        _priority(priority),
+        _timeout(timeout),
+        _script(script),
+        _args(args),
+        _endTime(-1),
+        _abortRequested(false),
+        _imageProcessor(ImageProcessorFactory::getInstance().newImageProcessor()),
+        _colors() {
+    _colors.resize(_imageProcessor->getLedCount(), ColorRgb::BLACK);
+
+    // disable the black border detector for effects
+    _imageProcessor->enableBalckBorderDetector(false);
 }
 
-PyObject *Effect::json2python(const Json::Value &json) const
-{
-	switch (json.type())
-	{
-	case Json::nullValue:
-		return Py_BuildValue("");
-	case Json::realValue:
-		return Py_BuildValue("d", json.asDouble());
-	case Json::intValue:
-	case Json::uintValue:
-		return Py_BuildValue("i", json.asInt());
-	case Json::booleanValue:
-		return Py_BuildValue("i", json.asBool() ? 1 : 0);
-	case Json::stringValue:
-		return Py_BuildValue("s", json.asCString());
-	case Json::objectValue:
-	{
-		PyObject * dict= PyDict_New();
-		for (Json::Value::iterator i = json.begin(); i != json.end(); ++i)
-		{
-			PyObject * obj = json2python(*i);
-			PyDict_SetItemString(dict, i.memberName(), obj);
-			Py_XDECREF(obj);
-		}
-		return dict;
-	}
-	case Json::arrayValue:
-	{
-		PyObject * list = PyList_New(json.size());
-		for (Json::Value::iterator i = json.begin(); i != json.end(); ++i)
-		{
-			PyObject * obj = json2python(*i);
-			PyList_SetItem(list, i.index(), obj);
-			Py_XDECREF(obj);
-		}
-		return list;
-	}
-	}
-
-	assert(false);
-	return nullptr;
+Effect::~Effect() {
 }
 
-PyObject* Effect::wrapSetColor(PyObject *self, PyObject *args)
-{
-	// get the effect
-	Effect * effect = getEffect();
+void Effect::setColor(lua_State *state) {
+    // check if we have aborted already
+    if (shouldFinish())
+    {
+        return;
+    }
 
-	// check if we have aborted already
-	if (effect->_abortRequested)
-	{
-		return Py_BuildValue("");
-	}
+    // check the number of arguments
+    if (lua_gettop(state) == 4) {
+        // three seperate arguments for red, green, and blue
+        ColorRgb color;
+        color.red = (uint8_t) luaL_checkinteger(state, 2);
+        color.green = (uint8_t) luaL_checkinteger(state, 3);
+        color.blue = (uint8_t) luaL_checkinteger(state, 4);
 
-	// determine the timeout
-	int timeout = effect->_timeout;
-	if (timeout > 0)
-	{
-		timeout = effect->_endTime - QDateTime::currentMSecsSinceEpoch();
+        std::fill(_colors.begin(), _colors.end(), color);
+        ColorSetArgs args = {_priority, _colors, 0, false};
+        setColorsEvent.notify(this, args);
+    }
+    else if (lua_gettop(state) == 2 && lua_istable(state, -1)) {
+        // one argument with array/table of colors (also a table with RGB values)
+        lua_len(state, -1);
+        int count = (int) lua_tointeger(state, -1);
+        lua_pop(state, 1);
 
-		// we are done if the time has passed
-		if (timeout <= 0)
-		{
-			return Py_BuildValue("");
-		}
-	}
+        for (int i = 1; i <= count; i++) {
+            lua_rawgeti(state, 2, i);
 
-	// check the number of arguments
-	int argCount = PyTuple_Size(args);
-	if (argCount == 3)
-	{
-		// three seperate arguments for red, green, and blue
-		ColorRgb color;
-		if (PyArg_ParseTuple(args, "bbb", &color.red, &color.green, &color.blue))
-		{
-			std::fill(effect->_colors.begin(), effect->_colors.end(), color);
-			effect->setColors(effect->_priority, effect->_colors, timeout, false);
-			return Py_BuildValue("");
-		}
-		else
-		{
-			return nullptr;
-		}
-	}
-	else if (argCount == 1)
-	{
-		// bytearray of values
-		PyObject * bytearray = nullptr;
-		if (PyArg_ParseTuple(args, "O", &bytearray))
-		{
-			if (PyByteArray_Check(bytearray))
-			{
-				size_t length = PyByteArray_Size(bytearray);
-				if (length == 3 * effect->_imageProcessor->getLedCount())
-				{
-					char * data = PyByteArray_AS_STRING(bytearray);
-					memcpy(effect->_colors.data(), data, length);
-					effect->setColors(effect->_priority, effect->_colors, timeout, false);
-					return Py_BuildValue("");
-				}
-				else
-				{
-					PyErr_SetString(PyExc_RuntimeError, "Length of bytearray argument should be 3*ledCount");
-					return nullptr;
-				}
-			}
-			else
-			{
-				PyErr_SetString(PyExc_RuntimeError, "Argument is not a bytearray");
-				return nullptr;
-			}
-		}
-		else
-		{
-			return nullptr;
-		}
-	}
-	else
-	{
-		PyErr_SetString(PyExc_RuntimeError, "Function expect 1 or 3 arguments");
-		return nullptr;
-	}
+            ColorRgb color;
+            lua_rawgeti(state, -1, 1);
+            color.red = (uint8_t) luaL_checkinteger(state, -1);
+            lua_pop(state, 1);
 
-	// error
-	PyErr_SetString(PyExc_RuntimeError, "Unknown error");
-	return nullptr;
+            lua_rawgeti(state, -1, 2);
+            color.green = (uint8_t) luaL_checkinteger(state, -1);
+            lua_pop(state, 1);
+
+            lua_rawgeti(state, -1, 3);
+            color.blue = (uint8_t) luaL_checkinteger(state, -1);
+            lua_pop(state, 1);
+            _colors[i-1] = color;
+            //std::cout << i << ": " << color << std::endl;
+
+            lua_pop(state, 1);
+        }
+        ColorSetArgs args = {_priority, _colors, 0, false};
+        setColorsEvent.notify(this, args);
+    }
 }
 
-PyObject* Effect::wrapSetImage(PyObject *self, PyObject *args)
-{
-	// get the effect
-	Effect * effect = getEffect();
+void Effect::setImage(lua_State *state) {
+    // check if we have aborted already
+    if (shouldFinish())
+    {
+        return;
+    }
 
-	// check if we have aborted already
-	if (effect->_abortRequested)
-	{
-		return Py_BuildValue("");
-	}
+    // bytearray of values
+    int width = (int) luaL_checkinteger(state, 2), height = (int) luaL_checkinteger(state, 3);
 
-	// determine the timeout
-	int timeout = effect->_timeout;
-	if (timeout > 0)
-	{
-		timeout = effect->_endTime - QDateTime::currentMSecsSinceEpoch();
+    if (lua_istable(state, 4)) {
+        lua_len(state, -1);
+        const unsigned count = (unsigned) lua_tointeger(state, -1);
+        lua_pop(state, 1);
 
-		// we are done if the time has passed
-		if (timeout <= 0)
-		{
-			return Py_BuildValue("");
-		}
-	}
+        if (count == unsigned(width * height))
+        {
+            uint8_t data[count * 3];
 
-	// bytearray of values
-	int width, height;
-	PyObject * bytearray = nullptr;
-	if (PyArg_ParseTuple(args, "iiO", &width, &height, &bytearray))
-	{
-		if (PyByteArray_Check(bytearray))
-		{
-			int length = PyByteArray_Size(bytearray);
-			if (length == 3 * width * height)
-			{
-				Image<ColorRgb> image(width, height);
-				char * data = PyByteArray_AS_STRING(bytearray);
-				memcpy(image.memptr(), data, length);
+            for (unsigned i = 0; i < count; i++) {
+                lua_rawgeti(state, 4, i+1);
 
-				effect->_imageProcessor->process(image, effect->_colors);
-				effect->setColors(effect->_priority, effect->_colors, timeout, false);
-				return Py_BuildValue("");
-			}
-			else
-			{
-				PyErr_SetString(PyExc_RuntimeError, "Length of bytearray argument should be 3*width*height");
-				return nullptr;
-			}
-		}
-		else
-		{
-			PyErr_SetString(PyExc_RuntimeError, "Argument 3 is not a bytearray");
-			return nullptr;
-		}
-	}
-	else
-	{
-		return nullptr;
-	}
+                lua_rawgeti(state, -1, 1);
+                data[i*3] = (uint8_t) luaL_checkinteger(state, -1);
+                lua_pop(state, 1);
 
-	// error
-	PyErr_SetString(PyExc_RuntimeError, "Unknown error");
-	return nullptr;
+                lua_rawgeti(state, -1, 2);
+                data[i*3+1] = (uint8_t) luaL_checkinteger(state, -1);
+                lua_pop(state, 1);
+
+                lua_rawgeti(state, -1, 3);
+                data[i*3+2] = (uint8_t) luaL_checkinteger(state, -1);
+                lua_pop(state, 1);
+
+                lua_pop(state, 1);
+            }
+            Image<ColorRgb> image(width, height);
+            memcpy(image.memptr(), data, count * 3);
+            _imageProcessor->process(image, _colors);
+            ColorSetArgs args = {_priority, _colors, 0, false};
+            setColorsEvent.notify(this, args);
+        }
+        else
+        {
+            std::cerr << "[Effect] ledData size does not match image size" << std::endl;
+        }
+    }
 }
 
-PyObject* Effect::wrapAbort(PyObject *self, PyObject *)
-{
-	Effect * effect = getEffect();
+void Effect::run() {
+    if (_timeout > 0) {
+        _endTime = (Poco::Timestamp().epochMicroseconds() / 1000) + _timeout;
+    }
 
-	// Test if the effect has reached it end time
-	if (effect->_timeout > 0 && QDateTime::currentMSecsSinceEpoch() > effect->_endTime)
-	{
-		effect->_abortRequested = true;
-	}
+    // create new Lua state
+    lua_State *L = luaL_newstate();
+    luaL_openlibs(L);
 
-	return Py_BuildValue("i", effect->_abortRequested ? 1 : 0);
+    luaL_newmetatable(L, "EffectMT");
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -2, "__index");
+    lua_pushcfunction(L, lua_setColor);
+    lua_setfield(L, -2, "setColor");
+    lua_pushcfunction(L, lua_setImage);
+    lua_setfield(L, -2, "setImage");
+    lua_pushcfunction(L, lua_abort);
+    lua_setfield(L, -2, "abort");
+    lua_pushcfunction(L, lua_sleep);
+    lua_setfield(L, -2, "sleep");
+
+    // add ledCount variable
+    lua_pushinteger(L, _imageProcessor->getLedCount());
+    lua_setfield(L, -2, "ledCount");
+
+    setArgumentsToLua(_args, L);
+    lua_setfield(L, -2, "args");
+
+    Effect **ud = static_cast<Effect **>(lua_newuserdata(L, sizeof(Effect *)));
+    *(ud) = this;
+    luaL_setmetatable(L, "EffectMT");
+    lua_setglobal(L, "hyperion");
+
+    luaL_newmetatable(L, "ColorsMT");
+    lua_pushcfunction(L, lua_rgb_to_hsv);
+    lua_setfield(L, -2, "rgb2hsv");
+    lua_pushcfunction(L, lua_hsv_to_rgb);
+    lua_setfield(L, -2, "hsv2rgb");
+    luaL_setmetatable(L, "ColorsMT");
+    lua_setglobal(L, "colors");
+
+    lua_settop(L, 0); //empty the lua stack
+    if (luaL_dofile(L, _script.c_str())) {
+        fprintf(stderr, "error: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+
+    // close the Lua state
+    lua_close(L);
+
+    finishedEvent.notify(this);
 }
 
-Effect * Effect::getEffect()
-{
-	// extract the module from the runtime
-	PyObject * module = PyObject_GetAttrString(PyImport_AddModule("__main__"), "hyperion");
+int Effect::getPriority() const {
+    return _priority;
+}
 
-	if (!PyModule_Check(module))
-	{
-		// something is wrong
-		Py_XDECREF(module);
-		std::cerr << "Unable to retrieve the effect object from the Python runtime" << std::endl;
-		return nullptr;
-	}
+bool Effect::isAbortRequested() const {
+    return _abortRequested;
+}
 
-	// retrieve the capsule with the effect
-	PyObject * effectCapsule = PyObject_GetAttrString(module, "__effectObj");
-	Py_XDECREF(module);
+bool Effect::shouldFinish() {
+    // Test if the effect has reached it end time
+    if (_timeout > 0)
+    {
+        if ((Poco::Timestamp().epochMicroseconds() / 1000) > _endTime) {
+            return true;
+        }
+    }
+    return _abortRequested;
+}
 
-	if (!PyCapsule_CheckExact(effectCapsule))
-	{
-		// something is wrong
-		Py_XDECREF(effectCapsule);
-		std::cerr << "Unable to retrieve the effect object from the Python runtime" << std::endl;
-		return nullptr;
-	}
+void Effect::abort() {
+    _abortRequested = true;
+}
 
-	// Get the effect from the capsule
-	Effect * effect = reinterpret_cast<Effect *>(PyCapsule_GetPointer(effectCapsule, nullptr));
-	Py_XDECREF(effectCapsule);
-	return effect;
+void Effect::setArgumentsToLua(const Poco::Dynamic::Var &obj, lua_State *state) {
+    //std::cout << obj.toString() << std::endl;
+
+    if (obj.isEmpty())
+        return;
+
+    if (obj.isNumeric()) {
+        lua_pushnumber(state, obj.convert<double>());
+    }
+    else if (obj.isInteger()) {
+        lua_pushinteger(state, obj.convert<int>());
+    }
+    else if (obj.isBoolean()) {
+        lua_pushboolean(state, obj.convert<bool>());
+    }
+    else if (obj.isString()) {
+        lua_pushstring(state, obj.toString().c_str());
+    }
+    else if (obj.isStruct()) {
+        lua_newtable(state);
+        Poco::DynamicStruct str = obj.extract<Poco::DynamicStruct>();
+        for (auto name : str.members()) {
+            setArgumentsToLua(str[name], state);
+            lua_setfield(state, -2, name.c_str());
+        }
+    }
+    else if (obj.isArray()) {
+        lua_newtable(state);
+        for (unsigned i = 0; i < obj.size(); i++) {
+            lua_pushinteger(state, i + 1); // lua's index starts at 1
+            setArgumentsToLua(obj[i], state);
+            lua_settable(state, -3);
+        }
+    }
 }

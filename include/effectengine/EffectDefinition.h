@@ -1,14 +1,12 @@
 #pragma once
 
-// stl include
-#include <string>
+#include "Poco/Dynamic/Struct.h"
 
-// json include
-#include <json/value.h>
+#include <string>
 
 struct EffectDefinition
 {
-	std::string name;
-	std::string script;
-	Json::Value args;
+    std::string name;
+    std::string script;
+    Poco::DynamicStruct args;
 };

@@ -1,6 +1,6 @@
 {
 	"name" : "Knight rider",
-	"script" : "knight-rider.py",
+	"script" : "knight-rider.lua",
 	"args" :
 	{
 		"speed" : 1.0,

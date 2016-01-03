@@ -1,10 +1,10 @@
 {
 	"name" : "Rainbow swirl fast",
-	"script" : "rainbow-swirl.py",
+	"script" : "rainbow-swirl.lua",
 	"args" :
 	{
-		"rotation-time" : 3.0,
-		"brightness" : 1.0,
+		"rotation-time" : 3000,
+		"brightness" : 255,
 		"reverse" : false
 	}
 }

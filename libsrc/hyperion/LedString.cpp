@@ -3,29 +3,31 @@
 #include <unistd.h>
 #include <iostream>
 
-// Json includes
-#include <json/json.h>
-
 // hyperion includes
 #include <hyperion/LedString.h>
 
 
 LedString::LedString()
 {
-	// empty
+    // empty
 }
 
 LedString::~LedString()
 {
-	// empty
+    // empty
+}
+
+unsigned LedString::count() const
+{
+    return (unsigned) _leds.size();
 }
 
 std::vector<Led>& LedString::leds()
 {
-	return mLeds;
+    return _leds;
 }
 
 const std::vector<Led>& LedString::leds() const
 {
-	return mLeds;
+    return _leds;
 }
