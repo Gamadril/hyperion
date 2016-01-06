@@ -176,7 +176,7 @@ link_directories(${INSTALL_DIR}/lib)
 endif()
 
 include (cmake/FindRPi.cmake)
-if(RPI_FOUND)
+if(RPI_FOUND OR ${TARGET_DEVICE} STREQUAL "rpi")
 	ExternalProject_Add(rpi-firmware
 		PREFIX "${PROJECT_BINARY_DIR}/external/rpi-firmware"
 		DOWNLOAD_NAME "firmware.tar.gz"
