@@ -14,4 +14,9 @@ Features:
 
 STATUS: HIGHLY EXPERIMENTAL!
 
+Build for RPi:
+./build.sh rpi -DENABLE_GRABBER_DISPMANX=ON -DENABLE_EFFECT_ENGINE=ON -DENABLE_SERVER_JSON=ON
+
+add other options for output devices
+
 The source is released under MIT-License (see http://opensource.org/licenses/MIT).
