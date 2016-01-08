@@ -27,6 +27,10 @@ if(ENABLE_LED_TCPSOCKET)
 	list(APPEND Leddevice_SOURCES TcpSocketDevice.cpp)
 endif()
 
+if(ENABLE_LED_UDPSOCKET)
+	list(APPEND Leddevice_SOURCES UdpSocketDevice.cpp)
+endif()
+
 if(ENABLE_LED_SERIAL_TPM2)
 	list(APPEND Leddevice_SOURCES LedDeviceTpm2Serial.cpp)
 endif()
@@ -49,6 +53,10 @@ endif()
 
 if(ENABLE_LED_TCPSOCKET_TPM2)
 	list(APPEND Leddevice_SOURCES LedDeviceTpm2TcpSocket.cpp)
+endif()
+
+if(ENABLE_LED_UDPSOCKET_TPM2)
+	list(APPEND Leddevice_SOURCES LedDeviceTpm2UdpSocket.cpp)
 endif()
 
 if(ENABLE_LED_APA102 OR ENABLE_LED_LPD6803 OR ENABLE_LED_LPD8806 OR ENABLE_LED_P9813 OR ENABLE_LED_WS2801)
@@ -96,7 +104,7 @@ if(ENABLE_LED_SERIAL)
 	endif()
 endif()
 
-if(ENABLE_LED_TCPSOCKET)
+if(ENABLE_LED_TCPSOCKET OR ENABLE_LED_UDPSOCKET)
     target_link_libraries(leddevice PocoNet)
 endif()
 

@@ -66,6 +66,9 @@
 #ifdef ENABLE_LED_TCPSOCKET_TPM2
 #include "LedDeviceTpm2TcpSocket.h"
 #endif
+#ifdef ENABLE_LED_UDPSOCKET_TPM2
+#include "LedDeviceTpm2UdpSocket.h"
+#endif
 
 LedDevice * LedDeviceFactory::construct(const Poco::DynamicStruct & deviceConfig)
 {
@@ -86,7 +89,10 @@ LedDevice * LedDeviceFactory::construct(const Poco::DynamicStruct & deviceConfig
     {
         const std::string output = deviceConfig["output"];
         const unsigned rate      = deviceConfig["rate"];
-        const int delay_ms       = deviceConfig["delayAfterConnect"];
+        int delay_ms = 1000;
+        if (deviceConfig.contains("delayAfterConnect")) {
+            delay_ms = deviceConfig["delayAfterConnect"];
+        }
 
         LedDeviceAdalight* deviceAdalight = new LedDeviceAdalight(output, rate, delay_ms);
         deviceAdalight->open();
@@ -99,7 +105,10 @@ LedDevice * LedDeviceFactory::construct(const Poco::DynamicStruct & deviceConfig
     {
         const std::string output = deviceConfig["output"];
         const unsigned rate      = deviceConfig["rate"];
-        const int delay_ms       = deviceConfig["delayAfterConnect"];
+        int delay_ms = 0;
+        if (deviceConfig.contains("delayAfterConnect")) {
+            delay_ms = deviceConfig["delayAfterConnect"];
+        }
 
         LedDeviceAmbiLed* deviceAmbiLed = new LedDeviceAmbiLed(output, rate, delay_ms);
         deviceAmbiLed->open();
@@ -308,6 +317,15 @@ LedDevice * LedDeviceFactory::construct(const Poco::DynamicStruct & deviceConfig
 
         LedDeviceTpm2TcpSocket * deviceTpm2 = new LedDeviceTpm2TcpSocket(output);
         deviceTpm2->open();
+        device = deviceTpm2;
+    }
+#endif
+#ifdef ENABLE_LED_UDPSOCKET_TPM2
+    else if (type == "tpm2udp")
+    {
+        const std::string output = deviceConfig["output"];
+
+        LedDeviceTpm2UdpSocket * deviceTpm2 = new LedDeviceTpm2UdpSocket(output);
         device = deviceTpm2;
     }
 #endif

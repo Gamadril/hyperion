@@ -36,6 +36,8 @@
 
 #cmakedefine ENABLE_LED_TCPSOCKET_TPM2
 
+#cmakedefine ENABLE_LED_UDPSOCKET_TPM2
+
 #cmakedefine ENABLE_LED_ATMO
 
 #cmakedefine ENABLE_LED_WS2812B_PWM

@@ -67,6 +67,9 @@ message(STATUS "ENABLE_LED_TINKERFORGE = " ${ENABLE_LED_TINKERFORGE})
 option(ENABLE_LED_TCPSOCKET_TPM2 "Enable the tpm2 LED device over tcp socket" OFF)
 message(STATUS "ENABLE_LED_TCPSOCKET_TPM2 = " ${ENABLE_LED_TCPSOCKET_TPM2})
 
+option(ENABLE_LED_UDPSOCKET_TPM2 "Enable the tpm2 LED device over udp socket" OFF)
+message(STATUS "ENABLE_LED_UDPSOCKET_TPM2 = " ${ENABLE_LED_UDPSOCKET_TPM2})
+
 if(ENABLE_LED_SERIAL_TPM2 OR ENABLE_LED_ADALIGHT OR ENABLE_LED_AMBILED OR ENABLE_LED_ATMOLIGHT OR ENABLE_LED_SEDU)
 	set(ENABLE_LED_SERIAL ON)
 	mark_as_advanced(ENABLE_LED_SERIAL)
@@ -75,6 +78,11 @@ endif()
 if(ENABLE_LED_TCPSOCKET_TPM2)
 	set(ENABLE_LED_TCPSOCKET ON)
 	mark_as_advanced(ENABLE_LED_TCPSOCKET)
+endif()
+
+if(ENABLE_LED_UDPSOCKET_TPM2)
+    set(ENABLE_LED_UDPSOCKET ON)
+    mark_as_advanced(ENABLE_LED_UDPSOCKET)
 endif()
 
 option(ENABLE_GRABBER_DISPMANX "Enable the RPi dispmanx grabber" OFF)
@@ -141,7 +149,7 @@ set(CMAKE_BUILD_TYPE "MinSizeRel")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 
 # check if cross compiling
-if(NOT ${TARGET_DEVICE} STREQUAL "")
+if(NOT TARGET_DEVICE STREQUAL "")
 	get_filename_component(TARGET_DEVICE_FOLDER "${CMAKE_SOURCE_DIR}/platforms/${TARGET_DEVICE}" ABSOLUTE)
 	include("${TARGET_DEVICE_FOLDER}/build.cmake")
 	set(TOOLCHAIN_ARG "-DCMAKE_TOOLCHAIN_FILE=${TARGET_DEVICE_FOLDER}/toolchain.cmake")
@@ -176,7 +184,7 @@ link_directories(${INSTALL_DIR}/lib)
 endif()
 
 include (cmake/FindRPi.cmake)
-if(RPI_FOUND OR ${TARGET_DEVICE} STREQUAL "rpi")
+if(RPI_FOUND OR TARGET_DEVICE STREQUAL "rpi")
 	ExternalProject_Add(rpi-firmware
 		PREFIX "${PROJECT_BINARY_DIR}/external/rpi-firmware"
 		DOWNLOAD_NAME "firmware.tar.gz"
