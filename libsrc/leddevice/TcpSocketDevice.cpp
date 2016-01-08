@@ -13,7 +13,7 @@ TcpSocketDevice::~TcpSocketDevice() {
     delete(_socket);
 }
 
-int TcpSocketDevice::open(const unsigned timeout = 2000) {
+int TcpSocketDevice::open(const unsigned timeout) {
     std::cout << "Opening TCP socket connection to " << _address.toString() << std::endl;
 
     try {

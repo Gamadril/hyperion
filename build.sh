@@ -2,9 +2,11 @@
 
 SCRIPT_DIR="$( cd $(dirname $0) ; pwd )"
 
-if [ -z "$1" ]; then
+if [ -z "$1" ] || [ ${1:0:2} == "-D" ] ;
+then
     TARGET=$(uname -sm)
     echo "Building for current host target: $TARGET"
+	CMAKE_PARAMS=${@:1}
 else
     if [ ! -f "$SCRIPT_DIR/platforms/$1/toolchain.cmake" ]; then
         echo "Provided target \"$1\" is not supported"
@@ -20,12 +22,13 @@ else
     fi
     TOOLCHAIN_DEFINE="-DCMAKE_TOOLCHAIN_FILE=$SCRIPT_DIR/platforms/$1/toolchain.cmake"
     TARGET_DEFINE="-DTARGET_DEVICE=$1"
+	CMAKE_PARAMS=${@:2}
 fi
 
 rm -rf ./build
 mkdir build
 cd build
 
-cmake $TOOLCHAIN_DEFINE $TARGET_DEFINE "${@:2}" ..
+cmake $TOOLCHAIN_DEFINE $TARGET_DEFINE "$CMAKE_PARAMS" ..
 make
 make package

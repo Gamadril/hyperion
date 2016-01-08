@@ -29,7 +29,7 @@ public:
     /// @param[in] timeout timeout in milliseconds
     /// @return Zero on succes else negative
     ///
-    int open(const unsigned timeout);
+    int open(const unsigned timeout = 2000);
 
     void close();
 
